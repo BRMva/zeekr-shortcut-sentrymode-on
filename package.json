@@ -32,7 +32,7 @@
         "description": "上面这个副账号的密码。 / Password of that account."
       },
       "GEOFENCES": {
-        "description": "不自动开哨兵的地点，最多 10 个，用分号 ; 隔开。每个地点写：名称, 纬度, 经度, 半径米（半径可省略，默认 600）。例：`Home, 1.3521, 103.8198, 600; Office, 1.2840, 103.8510, 600`。经纬度：在 Google 地图上右键该地点，点一下弹出的数字即可复制。一个地点都不要就填 none。 / Up to 10 places where sentry mode is never turned on, separated by `;`. Each: name, latitude, longitude, radius in metres (default 600). Write none for no places."
+        "description": "不自动开哨兵的地点，最多 10 个，用英文分号隔开；每个写：名称, 纬度, 经度, 半径米（默认 600）。例：Home, 1.3521, 103.8198, 600 / Up to 10 places, separated by ; each: name, latitude, longitude, radius in metres"
       },
       "STATE": {
         "description": "程序自动创建的存储，保持默认即可。 / Storage the program creates for itself; keep the default."
