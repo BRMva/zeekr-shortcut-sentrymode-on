@@ -1,0 +1,152 @@
+{
+  "keys": {
+    "access": "AK0123456789abcdefghijklmnopqrstu",
+    "secret": "SK0123456789abcdefghijklmnopqrstu",
+    "prod": "PS0123456789abcdefghijklmnopqrst",
+    "vinKey": "0123456789abcdef",
+    "vinIv": "fedcba9876543210"
+  },
+  "date": "Wed, 14 Oct 2026 08:00:00 GMT",
+  "gateway": [
+    {
+      "method": "GET",
+      "url": "https://gateway-pub-hw-em-sg.zeekrlife.com/overseas-app/region/url",
+      "expect": {
+        "X-HMAC-SIGNATURE": "legCSZN+AZW7yv7AaKp8Qp9YzrtaFo85d2Cx5i2qtLM=",
+        "X-HMAC-DIGEST": "fpindsYKp04oofl+hvzG1JOwTOJ99I5g4EAguB1ffeU=",
+        "X-HMAC-ACCESS-KEY": "AK0123456789abcdefghijklmnopqrstu",
+        "X-DATE": "Wed, 14 Oct 2026 08:00:00 GMT"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://x.zeekrlife.com/zeekr-cuc-idaas-sea/user/tspCode?tspClientId=1JwLroFkFFIpgFGdTRrm4_nzkkwDkfHj7RxJQb7J8tc",
+      "expect": {
+        "X-HMAC-SIGNATURE": "omfOrZFiT8D5aK0f+rgSKruOodznMm2wsr6cabdj/aU=",
+        "X-HMAC-DIGEST": "fpindsYKp04oofl+hvzG1JOwTOJ99I5g4EAguB1ffeU=",
+        "X-HMAC-ACCESS-KEY": "AK0123456789abcdefghijklmnopqrstu",
+        "X-DATE": "Wed, 14 Oct 2026 08:00:00 GMT"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://x.zeekrlife.com/a//b/user/updateLanguage?language=en&Zeta=1&alpha=2",
+      "expect": {
+        "X-HMAC-SIGNATURE": "QDisVoEBqTRea++3QpgacI2qV1JDKftwF0H2gkc9ARg=",
+        "X-HMAC-DIGEST": "fpindsYKp04oofl+hvzG1JOwTOJ99I5g4EAguB1ffeU=",
+        "X-HMAC-ACCESS-KEY": "AK0123456789abcdefghijklmnopqrstu",
+        "X-DATE": "Wed, 14 Oct 2026 08:00:00 GMT"
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://x.zeekrlife.com/zeekr-cuc-idaas-sea/auth/checkUserV2",
+      "expect": {
+        "X-HMAC-SIGNATURE": "OrY28M8pc0GXu7MdnKBfrvMoqhwak071U+9Fd4/g32s=",
+        "X-HMAC-DIGEST": "fpindsYKp04oofl+hvzG1JOwTOJ99I5g4EAguB1ffeU=",
+        "X-HMAC-ACCESS-KEY": "AK0123456789abcdefghijklmnopqrstu",
+        "X-DATE": "Wed, 14 Oct 2026 08:00:00 GMT"
+      }
+    }
+  ],
+  "vin": {
+    "plain": "LZEKR7X0000000001",
+    "encrypted": "MxIE/nldvfnR+lKPv8TW0hHEyidkVdFoVfU3W1Et95s="
+  },
+  "app": [
+    {
+      "method": "GET",
+      "url": "https://sea-snc-tsp-api-gw.zeekrlife.com/ms-app-bff/api/v4.0/veh/vehicle-list?needSharedCar=true",
+      "headers": {
+        "Accept-Encoding": "gzip",
+        "ACCEPT-LANGUAGE": "en-AU",
+        "AppId": "ONEX97FB91F061405",
+        "authorization": "BEARER",
+        "Content-Type": "application/json; charset=UTF-8",
+        "user-agent": "okhttp/4.12.0",
+        "X-API-SIGNATURE-VERSION": "2.0",
+        "X-APP-ID": "ZEEKRCNCH001M0001",
+        "x-app-os-version": "",
+        "x-device-id": "11111111-2222-3333-4444-555555555555",
+        "x-p": "Android",
+        "X-PLATFORM": "APP",
+        "X-PROJECT-ID": "ZEEKR_SEA",
+        "X-API-SIGNATURE-NONCE": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "X-TIMESTAMP": "1791964800000"
+      },
+      "body": null,
+      "expect": "KAM4OFy0QBZHOMZsXiDQMtO+hp7cL207rsbScTaTvJk="
+    },
+    {
+      "method": "GET",
+      "url": "https://sea-snc-tsp-api-gw.zeekrlife.com/ms-vehicle-status/api/v1.0/vehicle/status/latest?latest=false&target=new",
+      "headers": {
+        "Accept-Encoding": "gzip",
+        "ACCEPT-LANGUAGE": "en-AU",
+        "AppId": "ONEX97FB91F061405",
+        "authorization": "BEARER",
+        "Content-Type": "application/json; charset=UTF-8",
+        "user-agent": "okhttp/4.12.0",
+        "X-API-SIGNATURE-VERSION": "2.0",
+        "X-APP-ID": "ZEEKRCNCH001M0001",
+        "x-app-os-version": "",
+        "x-device-id": "11111111-2222-3333-4444-555555555555",
+        "x-p": "Android",
+        "X-PLATFORM": "APP",
+        "X-PROJECT-ID": "ZEEKR_SEA",
+        "X-API-SIGNATURE-NONCE": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "X-TIMESTAMP": "1791964800000",
+        "X-VIN": "MxIE/nldvfnR+lKPv8TW0hHEyidkVdFoVfU3W1Et95s="
+      },
+      "body": null,
+      "expect": "GzUUzK9Lldt5bKYQTHRITzlbuHDoVVn95OiPoHT2cs8="
+    },
+    {
+      "method": "POST",
+      "url": "https://sea-snc-tsp-api-gw.zeekrlife.com/ms-remote-control/v1.0/remoteControl/control",
+      "headers": {
+        "Accept-Encoding": "gzip",
+        "ACCEPT-LANGUAGE": "en-AU",
+        "AppId": "ONEX97FB91F061405",
+        "authorization": "BEARER",
+        "Content-Type": "application/json; charset=UTF-8",
+        "user-agent": "okhttp/4.12.0",
+        "X-API-SIGNATURE-VERSION": "2.0",
+        "X-APP-ID": "ZEEKRCNCH001M0001",
+        "x-app-os-version": "",
+        "x-device-id": "11111111-2222-3333-4444-555555555555",
+        "x-p": "Android",
+        "X-PLATFORM": "APP",
+        "X-PROJECT-ID": "ZEEKR_SEA",
+        "X-API-SIGNATURE-NONCE": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "X-TIMESTAMP": "1791964800000",
+        "X-VIN": "MxIE/nldvfnR+lKPv8TW0hHEyidkVdFoVfU3W1Et95s="
+      },
+      "body": "{\"command\":\"start\",\"serviceId\":\"RSM\",\"setting\":{\"serviceParameters\":[{\"key\":\"rsm\",\"value\":\"6\"}]}}",
+      "expect": "39E1jsdgWTx5OmNlHS0r3kaWyyaEIJHbkx7osaa2Qfo="
+    },
+    {
+      "method": "POST",
+      "url": "https://sea-snc-tsp-api-gw.zeekrlife.com/ms-user-auth/v1.0/auth/login",
+      "headers": {
+        "Accept-Encoding": "gzip",
+        "ACCEPT-LANGUAGE": "en-AU",
+        "AppId": "ONEX97FB91F061405",
+        "authorization": "",
+        "Content-Type": "application/json; charset=UTF-8",
+        "user-agent": "okhttp/4.12.0",
+        "X-API-SIGNATURE-VERSION": "2.0",
+        "X-APP-ID": "ZEEKRCNCH001M0001",
+        "x-app-os-version": "",
+        "x-device-id": "11111111-2222-3333-4444-555555555555",
+        "x-p": "Android",
+        "X-PLATFORM": "APP",
+        "X-PROJECT-ID": "ZEEKR_SEA",
+        "X-API-SIGNATURE-NONCE": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "X-TIMESTAMP": "1791964800000"
+      },
+      "body": "{\"identifier\":\"T\",\"identityType\":10,\"loginDeviceId\":\"google-sdk_gphone64_x86_64-36-16\",\"loginDeviceJgId\":\"\",\"loginDeviceType\":1,\"loginPhoneBrand\":\"google\",\"loginPhoneModel\":\"sdk_gphone64_x86_64\",\"loginSystem\":\"Android\",\"zh\":\"哨兵\"}",
+      "expect": "IylwVbjcIcY7VkKnj96vVcq83K80sD76zMgu6cJQYi0="
+    }
+  ]
+}

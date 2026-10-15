@@ -1,0 +1,14 @@
+# The three settings. The Deploy to Cloudflare page asks for each of them (descriptions
+# are in package.json). For a run on your PC, copy this file to .dev.vars and fill it in;
+# .dev.vars is git-ignored. On GitHub Actions, set them in the repository settings instead.
+
+# A second Zeekr account the car is shared with (not the one on your phone).
+ZEEKR_EMAIL=
+ZEEKR_PASSWORD=
+
+# Up to 10 places where sentry mode is never turned on automatically, separated by ";".
+# Each place: name, latitude, longitude, radius in metres (default 600), e.g.
+#   Home, 1.3521, 103.8198, 600; Office, 1.2840, 103.8510, 600
+# Required; write none for no places.
+# Latitude/longitude: right-click the spot in Google Maps and click the numbers to copy them.
+GEOFENCES=

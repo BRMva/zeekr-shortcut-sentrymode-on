@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zeekr-sentry",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  // No compatibility flags: the code uses Web APIs only, so the single-file version
+  // (dist/zeekr-sentry.js, pasted into the dashboard) runs with the dashboard defaults.
+
+  // No public URL: the worker only runs on its schedule.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  // Every 5 minutes (UTC cron syntax). Same cadence as the Home Assistant integration.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // Login session and parking state. Created on the first deploy (Deploy to Cloudflare
+  // button or `wrangler deploy`); later deploys reuse it because the Worker already has
+  // a binding called STATE.
+  "kv_namespaces": [{ "binding": "STATE" }],
+
+  // Logs in the dashboard: Workers & Pages → zeekr-sentry → Logs.
+  "observability": { "enabled": true },
+
+  // Settings are secrets, asked for on the Deploy to Cloudflare page: ZEEKR_EMAIL,
+  // ZEEKR_PASSWORD, GEOFENCES (see .dev.vars.example). Variables added later in the
+  // dashboard are kept when the Worker is redeployed.
+  "keep_vars": true
+}
