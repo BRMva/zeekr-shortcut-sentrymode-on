@@ -46,12 +46,19 @@ export function insideFence(position, fences) {
 export const MAX_FENCES = 10;
 const DEFAULT_RADIUS_M = 600;
 
+// Text typed with a Chinese or Japanese keyboard: full-width forms (，；．－, digits, letters)
+// become ASCII, and 、。−, the ideographic space count as , . - and a space.
+const NARROW = { "、": ",", "。": ".", "−": "-", "　": " " };
+const narrow = (text) =>
+  text.replace(/[！-～、。−　]/g, (c) => NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+
 // One place per line (or separated by ";"): "Home, 1.3521, 103.8198, 600".
 // The name and the radius in metres are optional: "1.3521, 103.8198" is a 600 m fence.
 // "none" means no geofences.
 export function parseGeofences(text) {
-  if (String(text ?? "").trim().toLowerCase() === "none") return [];
-  const places = String(text ?? "")
+  text = narrow(String(text ?? ""));
+  if (text.trim().toLowerCase() === "none") return [];
+  const places = text
     .split(/[\n;]+/)
     .map((s) => s.trim())
     .filter(Boolean);

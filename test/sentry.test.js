@@ -97,6 +97,20 @@ test("geofences: one place per line or per ';', name and radius optional", () =>
   assert.deepEqual(parseGeofences(" None "), []);
 });
 
+test("geofences: punctuation, digits and spaces from a Chinese or Japanese keyboard", () => {
+  const home = { name: "Home", lat: 1.3521, lon: 103.8198, radius_m: 600 };
+  assert.deepEqual(parseGeofences("Home，1.3521，103.8198，600"), [home]);
+  assert.deepEqual(parseGeofences("Home，１．３５２１，１０３．８１９８，６００"), [home]);
+  assert.deepEqual(parseGeofences("Home、1。3521、103。8198"), [home]);
+  assert.deepEqual(parseGeofences("　Ｈｏｍｅ，1.3521，103.8198　；家，1.2840，103.8510，50；"), [
+    home,
+    { name: "家", lat: 1.284, lon: 103.851, radius_m: 50 },
+  ]);
+  assert.deepEqual(parseGeofences("ホーム, －1.5, −45.25"), [{ name: "ホーム", lat: -1.5, lon: -45.25, radius_m: 600 }]);
+  assert.deepEqual(parseGeofences("ｎｏｎｅ"), []);
+  assert.throws(() => parseGeofences("Home，1.3521"), /geofence 1 should look like/);
+});
+
 test("geofences: at most 10, and bad lines are named", () => {
   assert.equal(parseGeofences(Array.from({ length: 10 }, (_, i) => `P${i}, 1, 103`).join("\n")).length, 10);
   assert.throws(() => parseGeofences(Array.from({ length: 11 }, () => "1, 103").join(";")), /at most 10/);

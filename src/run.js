@@ -4,7 +4,7 @@
 
 import { ABOUT, TAG } from "./about.js";
 import { APP_CONSTANTS } from "./app-constants.js";
-import { TokenExpired, ZeekrClient } from "./zeekr.js";
+import { SessionLost, ZeekrClient } from "./zeekr.js";
 import { decide, distanceM, parseGeofences, readCar } from "./sentry.js";
 
 // Every log line carries the version, so a pasted log says which code wrote it.
@@ -54,8 +54,8 @@ export async function run(env) {
     await ensureSession(client, env, config, false);
     await checkCars(client, env, config, done);
   } catch (err) {
-    if (!(err instanceof TokenExpired)) throw err;
-    log("token expired, logging in again");
+    if (!(err instanceof SessionLost)) throw err;
+    log(`${err.message}, logging in again`);
     await ensureSession(client, env, config, true);
     await checkCars(client, env, config, done);
   }
@@ -81,7 +81,7 @@ async function checkCars(client, env, config, done) {
     try {
       const status = await client.status(vin);
       const remote = await client.remoteState(vin).catch((err) => {
-        if (err instanceof TokenExpired) throw err;
+        if (err instanceof SessionLost) throw err;
         log(`${tag} remote state: ${err.message}`);
         return null;
       });
@@ -104,7 +104,7 @@ async function checkCars(client, env, config, done) {
       }
       done.add(vin);
     } catch (err) {
-      if (err instanceof TokenExpired) throw err;
+      if (err instanceof SessionLost) throw err;
       log(`${tag} error: ${err.message}`);
     }
   }

@@ -50,10 +50,9 @@ one in your phone's Zeekr app:** when an account signs in somewhere else, the ap
 
 1. Register a new Zeekr account with a different email address.
 2. In the Zeekr app, signed in with your main account, share your car with the new account.
-   <!-- To add: menu path and screenshots for sharing the car (docs/images/A1-*.png); can remote-control permission be chosen; does the second account have to accept -->
+   <!-- To add: menu path and screenshots for sharing the car; can remote-control permission be chosen; does the second account have to accept -->
 3. Sign in to the Zeekr app once with the second account, check that you can see the car and its sentry mode switch,
    then sign out. Don't use the second account in the app after that.
-   <!-- Screenshot: docs/images/A2.png -->
 
 ### 2. The places where sentry mode should not turn on (up to 10)
 
@@ -61,7 +60,9 @@ Near these places the program never turns sentry mode on: home, office, and so o
 
 1. On a computer, open [Google Maps](https://www.google.com/maps), find the place and **right-click** it.
 2. The first line of the menu is two numbers (latitude, longitude). Click it to copy them.
-   <!-- Screenshot: docs/images/A3.png (a public place, not a home) -->
+
+   ![Google Maps: right-click a place, the first line is its latitude and longitude](docs/images/google-maps-coordinates.jpg)
+
 3. Write each place as `name, latitude, longitude, radius`, with the radius in metres. Separate places with a semicolon:
 
 ```
@@ -72,8 +73,7 @@ Home, 1.3521, 103.8198, 600; Office, 1.2840, 103.8510, 600
 - **The radius** can be left out; it is then 600 metres. In underground car parks the car's reported position often
   drifts by a few hundred metres, and a radius that is too small makes "at home" look like "away". If there is a place
   nearby where you do want sentry mode (a shopping mall car park, say), make the radius smaller.
-- **Use plain commas and semicolons** (`,` and `;`). A Chinese or Japanese keyboard may type full-width ones (`，` `；`)
-  instead, which are not accepted.
+- Commas and semicolons typed with a Chinese or Japanese keyboard (`，` `；`) are fine too.
 - At least one place is required. If you really want none, write `none`.
 
 ### 3. A Cloudflare account (free)
@@ -90,54 +90,58 @@ account and deploys it from there.
 
 ## One-click setup, step by step
 
-Use a computer. It takes about 10 minutes. Cloudflare sometimes rewords its pages, so the labels you see may differ
-slightly from the ones below.
+Use a computer. It takes about 10 minutes. Cloudflare sometimes rewords its pages, so what you see may differ
+slightly from the pictures below.
 
 ### Step 1: Click the deploy button
 
 Click **Deploy to Cloudflare** at the top of this page, or open:
 https://deploy.workers.cloudflare.com/?url=https://github.com/dts88/zeekr-shortcut-sentrymode-on
 
-If you are not signed in to Cloudflare yet, you are asked to sign in first and then brought back to the setup page.
+If you are not signed in to Cloudflare yet, you are asked to sign in first and then brought to a page called
+**Set up your application**.
 
-<!-- Screenshot: docs/images/B1-*.png (the setup page before anything is filled in) -->
+### Step 2: Connect GitHub and name the project
 
-### Step 2: Connect GitHub
+![The top of "Set up your application": Git account, Create private Git repository, Project name](docs/images/deploy-1.jpg)
 
-On the setup page (**Configure your application**), connect your GitHub account under **Git account**:
+1. **Git account:** open the list and choose **New GitHub connection**. GitHub opens and asks you to let Cloudflare
+   use your account; allow it, and you come back to this page with your GitHub account selected. (If your GitHub account
+   is already listed under *Connected accounts*, just choose it.)
 
-1. GitHub opens and asks you to authorize Cloudflare's app.
-2. After you authorize it, you return to the Cloudflare setup page.
+   ![The Git account list: choose New GitHub connection](docs/images/deploy-github.jpg)
 
-<!-- Screenshot: docs/images/B2-*.png -->
-<!-- To confirm: which option to choose on GitHub's authorization page (All repositories / Only select repositories) -->
+   <!-- To confirm: the options on GitHub's authorization page (All repositories / Only select repositories) -->
 
-### Step 3: Fill in the setup page
+2. **Create private Git repository:** tick it. Cloudflare puts the copy of the program in your GitHub as a private
+   repository and deploys from it.
+3. **Project name:** keep `zeekr-sentry`.
 
-| On the page | What to do |
-|---|---|
-| Project name (Worker name) | Keep `zeekr-sentry` |
-| **Git repository** (Cloudflare creates a repository for you) | Keep the suggested name. If you can make it private, do. This is the copy of the program in your GitHub that Cloudflare deploys from |
-| STATE (KV namespace) | Keep `new`. A storage space is created for the sign-in session and the current parking |
-| **ZEEKR_EMAIL** | the second account's email address |
-| **ZEEKR_PASSWORD** | the second account's password |
-| **GEOFENCES** | the places you prepared |
-| Preview builds | **Off**, not needed |
-| Cloudflare Access | **Off**, not needed |
-| Advanced settings | Leave as they are |
+Below that, **Select KV namespace** shows **+ Create new** and a name for it. Keep both: this creates the storage the
+program uses for its sign-in session and the current parking.
 
-<!-- Screenshot: docs/images/B3-*.png (filled in; email blurred, password hidden) -->
-<!-- To confirm: exact English labels of every field, and where the project name field is -->
+### Step 3: Fill in the three settings
+
+![ZEEKR_EMAIL, ZEEKR_PASSWORD and GEOFENCES](docs/images/deploy-2.jpg)
+
+4. **ZEEKR_EMAIL:** the second Zeekr account's email address.
+5. **ZEEKR_PASSWORD:** that account's password.
+6. **GEOFENCES:** the places you prepared, for example `Home, 1.3521, 103.8198, 600`.
+
+Leave **Build command**, **Deploy command** and **Preview command** as they are.
 
 ### Step 4: Deploy
 
-Click the deploy button at the bottom of the page and wait 1–3 minutes until the page says the deployment has succeeded.
+![Switch off Enable Preview builds, then click Deploy](docs/images/deploy-3.jpg)
 
-<!-- Screenshot: docs/images/B4-*.png -->
-<!-- To confirm: the button text and the success message -->
+7. Switch **Enable Preview builds** off. It is only for people who change the program.
+8. Leave **Protect with Cloudflare Access** off and **Advanced settings** as they are, then click **Deploy**.
+
+Wait 1–3 minutes until the page says the deployment has succeeded.
+<!-- To confirm with a real run: the progress and success pages -->
 
 Cloudflare has now:
-- put a copy of the program in your GitHub,
+- put a private copy of the program in your GitHub,
 - created the storage space,
 - scheduled the program to run every 5 minutes,
 - stored the three settings, encrypted.
@@ -148,20 +152,21 @@ Cloudflare has now:
 
 ### Read the log
 
-1. In the Cloudflare dashboard, open **Workers & Pages** in the left menu and click `zeekr-sentry`.
-2. Open the **Logs** tab.
-3. A new schedule can take up to 15 minutes to start, so give it a little time.
-4. The log can contain other entries too. Filter by event type `scheduled` to see only the scheduled runs.
+1. In the Cloudflare dashboard, open **Compute** → **Workers & Pages** in the left menu and click `zeekr-sentry`.
 
-<!-- Screenshot: docs/images/C2-*.png -->
-<!-- To confirm: where the filter is and how to set it -->
+   ![Workers & Pages, then zeekr-sentry](docs/images/workers-list.jpg)
 
-The first run should look like this (`[v0.3.0]` is the program's version):
+2. Open the **Observability** tab. Each run adds a few lines. Lines starting with `[v…]` come from the program;
+   lines showing `*/5 * * * *` only mark that a scheduled run happened.
+
+   ![The Observability tab: the program's lines start with the version](docs/images/logs.jpg)
+
+A new schedule can take up to 15 minutes to start. The first run looks like this (`[v0.3.2]` is the program's version):
 
 ```
-[v0.3.0] logging in · zeekr-sentry 0.3.0 · https://github.com/dts88/zeekr-shortcut-sentrymode-on · based on Fryyyyy/zeekr_ev_api (MIT)
-[v0.3.0] logged in (SG account, region SEA), 1 car(s)
-[v0.3.0] car …123456 engine=engine-off locked=true battery=80% sentry=off 120 m from "Home" -> none: inside geofence "Home"
+[v0.3.2] logging in · zeekr-sentry 0.3.2 · https://github.com/dts88/zeekr-shortcut-sentrymode-on · based on Fryyyyy/zeekr_ev_api (MIT)
+[v0.3.2] logged in (SG account, region SEA), 1 car(s)
+[v0.3.2] car …123456 engine=engine-off locked=true battery=80% sentry=off 120 m from "Home" -> none: inside geofence "Home"
 ```
 
 The last line is the result of each check:
@@ -182,8 +187,8 @@ Park somewhere outside your places and lock the car. Within 10 minutes, open the
 The log shows:
 
 ```
-[v0.3.0] car …123456 engine=engine-off locked=true battery=80% sentry=off 2400 m from "Home" -> enable: attempt 1/3
-[v0.3.0] car …123456 sentry start sent
+[v0.3.2] car …123456 engine=engine-off locked=true battery=80% sentry=off 2400 m from "Home" -> enable: attempt 1/3
+[v0.3.2] car …123456 sentry start sent
 ```
 
 ---
@@ -192,36 +197,44 @@ The log shows:
 
 ### Read the log
 
-Cloudflare dashboard → **Workers & Pages** → `zeekr-sentry` → **Logs**.
+Cloudflare dashboard → **Compute** → **Workers & Pages** → `zeekr-sentry` → **Observability**.
 
 ### Change your places or password
 
-1. Cloudflare dashboard → **Workers & Pages** → `zeekr-sentry` → **Settings** → **Variables and Secrets**.
-2. Click the edit button next to the setting (for example `GEOFENCES`), enter the new value and save.
+1. Cloudflare dashboard → **Compute** → **Workers & Pages** → `zeekr-sentry` → **Settings**.
+2. Under **Runtime variables and secrets**, click the edit (pencil) button next to the setting, for example `GEOFENCES`.
 
-Saved secrets cannot be viewed again, so type the whole value in, not just the part you are changing.
+   ![Settings, then the pencil next to the setting](docs/images/settings-secrets.jpg)
 
-<!-- Screenshot: docs/images/C3-*.png -->
-<!-- To confirm: whether a separate Deploy click is needed after saving -->
+3. Saved secrets cannot be viewed again: click **Rotate**, type the whole new value (not just the part you are
+   changing), then click **Deploy**. (**Save version** alone does not put the change into use.)
+
+   ![Rotate, type the new value, Deploy](docs/images/secret-rotate.jpg)
 
 ### Pause and resume
 
-- **Pause:** **Settings** → **Trigger Events**, delete the schedule that runs every 5 minutes.
-- **Resume:** in the same place, **Add** → **Cron Triggers**. If there is a frequency choice, pick minutes and enter `5`;
-  if there is only a text box, enter `*/5 * * * *`. Save.
+On the Worker's **Settings** page, under **Trigger events**:
 
-<!-- Screenshot: docs/images/C4-*.png -->
+![Trigger events: the bin pauses, Add resumes; Delete removes the whole Worker](docs/images/trigger-events.jpg)
+
+- **Pause:** delete the cron trigger that runs every 5 minutes (the bin icon, 1).
+- **Resume:** click **+ Add** (2). On the **Schedule** tab, set *Execute Worker every* to **Minute(s)** and change the
+  number to **5** (it starts at 30), then click **Add**.
+
+  ![Execute Worker every 5 Minute(s), then Add](docs/images/cron-add.jpg)
 
 ### Uninstall
 
-1. Cloudflare dashboard → **Workers & Pages** → `zeekr-sentry` → **Settings** → delete the Worker at the bottom of the page.
-2. Cloudflare dashboard → **Storage & Databases** → **Workers KV**: delete the storage space created during setup (its
-   name contains `zeekr-sentry`).
-3. On GitHub, delete the repository created in step 3 of the setup (repository page → **Settings** → **Delete this
-   repository** at the bottom).
-4. In the Zeekr app, stop sharing the car with the second account.
+1. On the Worker's **Settings** page, under **Danger zone**, click **Delete** next to *Delete Worker* (3 in the picture
+   above).
+2. Cloudflare dashboard → **Storage & databases** → **Workers KV**: delete the storage space created during setup
+   (`zeekr-sentry`, or a name starting with it) from the **⋯** menu on its row.
 
-<!-- Screenshot: docs/images/C5.png, docs/images/C6.png -->
+   ![Workers KV: the storage space created during setup](docs/images/kv-list.jpg)
+
+3. On GitHub, delete the repository created during setup (repository page → **Settings** → **Delete this repository**
+   at the bottom).
+4. In the Zeekr app, stop sharing the car with the second account.
 
 ### Upgrade to a new version
 
@@ -242,9 +255,8 @@ No. Cloudflare's free plan allows 100,000 requests a day; this program runs abou
 [Change your places or password](#change-your-places-or-password)).
 
 **Sentry mode was turned on while the car was at home.**
-Look at `… m from "Home"` in that log line. If the distance is larger than your radius, then either the coordinates
-are off, the radius is too small (underground car parks drift), or `GEOFENCES` uses full-width punctuation or another
-wrong format.
+Look at `… m from "Home"` in that log line. If the distance is larger than your radius, either the coordinates are off,
+the radius is too small (underground car parks drift), or `GEOFENCES` is not written correctly.
 
 **I parked away from home and sentry mode did not turn on.**
 Look at the reason after `-> none:` in the log:
@@ -262,8 +274,9 @@ Look at the reason after `-> none:` in the log:
 
 | Message | Meaning |
 |---|---|
+| `signed out: the account logged in elsewhere …, logging in again` | the second account was used somewhere else (the Zeekr app, or another copy of this program), so the program signs in again. If this happens often, check that nothing else uses the second account |
 | `token expired, logging in again` | the sign-in expired and the program signs in again. Occasional ones are normal |
-| `missing: …` | a setting is missing; add it under Variables and Secrets |
+| `missing: …` | a setting is missing; add it under **Runtime variables and secrets** |
 | `geofence 2 should look like …` | the 2nd place is not written correctly |
 | `no Zeekr account with this email …` | the email is wrong, or it is a European account (not supported) |
 | `login needed but held back …` | the program signed in less than 30 minutes ago and waits before signing in again, so the account is not locked. If it keeps appearing, check the password |

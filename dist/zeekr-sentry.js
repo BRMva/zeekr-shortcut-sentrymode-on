@@ -1,4 +1,4 @@
-// zeekr-sentry 0.3.0 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
+// zeekr-sentry 0.3.2 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
 // Turns Zeekr sentry mode on when the car is parked and locked away from your places.
 // Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code
 // editor. Step by step: docs/setup-manual.md in the repository above.
@@ -11,7 +11,7 @@
 // src/about.js
 var ABOUT = {
   name: "zeekr-sentry",
-  version: "0.3.0",
+  version: "0.3.2",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
@@ -318,8 +318,13 @@ var GATEWAY_HEADERS = {
 var TIMEOUT_MS = 3e4;
 var ZeekrError = class extends Error {
 };
-var TokenExpired = class extends ZeekrError {
+var SessionLost = class extends ZeekrError {
 };
+function sessionLost(result) {
+  if (result.msg === "Token expired") return "token expired";
+  if (result.code === "079021") return "signed out: the account logged in elsewhere (the Zeekr app or another copy of this program)";
+  return null;
+}
 async function readJson(resp) {
   const text = await resp.text();
   try {
@@ -372,7 +377,8 @@ var ZeekrClient = class {
     headers["X-SIGNATURE"] = await appSignature(method, url, headers, text, this.s.prodSecret);
     const resp = await fetch(url, { method, headers, body: text, signal: AbortSignal.timeout(TIMEOUT_MS) });
     const result = await readJson(resp);
-    if (result.msg === "Token expired") throw new TokenExpired("Token expired");
+    const lost = sessionLost(result);
+    if (lost) throw new SessionLost(lost);
     return result;
   }
   // ---- login (same calls and order as the Python client) ----
@@ -500,9 +506,12 @@ function insideFence(position, fences) {
 }
 var MAX_FENCES = 10;
 var DEFAULT_RADIUS_M = 600;
+var NARROW = { "、": ",", "。": ".", "−": "-", "　": " " };
+var narrow = (text) => text.replace(/[！-～、。−　]/g, (c) => NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 65248));
 function parseGeofences(text) {
-  if (String(text ?? "").trim().toLowerCase() === "none") return [];
-  const places = String(text ?? "").split(/[\n;]+/).map((s) => s.trim()).filter(Boolean);
+  text = narrow(String(text ?? ""));
+  if (text.trim().toLowerCase() === "none") return [];
+  const places = text.split(/[\n;]+/).map((s) => s.trim()).filter(Boolean);
   if (places.length > MAX_FENCES) throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
   return places.map((place, i) => {
     const parts = place.split(",").map((s) => s.trim());
@@ -575,8 +584,8 @@ async function run(env) {
     await ensureSession(client, env, config, false);
     await checkCars(client, env, config, done);
   } catch (err) {
-    if (!(err instanceof TokenExpired)) throw err;
-    log("token expired, logging in again");
+    if (!(err instanceof SessionLost)) throw err;
+    log(`${err.message}, logging in again`);
     await ensureSession(client, env, config, true);
     await checkCars(client, env, config, done);
   }
@@ -600,7 +609,7 @@ async function checkCars(client, env, config, done) {
     try {
       const status = await client.status(vin);
       const remote = await client.remoteState(vin).catch((err) => {
-        if (err instanceof TokenExpired) throw err;
+        if (err instanceof SessionLost) throw err;
         log(`${tag} remote state: ${err.message}`);
         return null;
       });
@@ -622,7 +631,7 @@ async function checkCars(client, env, config, done) {
       }
       done.add(vin);
     } catch (err) {
-      if (err instanceof TokenExpired) throw err;
+      if (err instanceof SessionLost) throw err;
       log(`${tag} error: ${err.message}`);
     }
   }

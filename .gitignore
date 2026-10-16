@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .dev.vars
 .state.enc
+.claude/
+docs/images/raw/

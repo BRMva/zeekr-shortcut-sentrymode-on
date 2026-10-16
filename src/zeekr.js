@@ -42,7 +42,16 @@ const GATEWAY_HEADERS = {
 const TIMEOUT_MS = 30_000;
 
 export class ZeekrError extends Error {}
-export class TokenExpired extends ZeekrError {}
+// The bearer session is gone and only a new login brings it back.
+export class SessionLost extends ZeekrError {}
+
+// How the TSP gateway says the bearer session is gone. Logging in anywhere else with the same
+// account (the Zeekr app, another copy of this program) ends this session.
+function sessionLost(result) {
+  if (result.msg === "Token expired") return "token expired";
+  if (result.code === "079021") return "signed out: the account logged in elsewhere (the Zeekr app or another copy of this program)";
+  return null;
+}
 
 async function readJson(resp) {
   const text = await resp.text();
@@ -101,7 +110,8 @@ export class ZeekrClient {
     headers["X-SIGNATURE"] = await appSignature(method, url, headers, text, this.s.prodSecret);
     const resp = await fetch(url, { method, headers, body: text, signal: AbortSignal.timeout(TIMEOUT_MS) });
     const result = await readJson(resp);
-    if (result.msg === "Token expired") throw new TokenExpired("Token expired");
+    const lost = sessionLost(result);
+    if (lost) throw new SessionLost(lost);
     return result;
   }
 

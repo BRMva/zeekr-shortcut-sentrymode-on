@@ -3,7 +3,7 @@
 // match package.json (a test checks it); bump both for every change that ships.
 export const ABOUT = {
   name: "zeekr-sentry",
-  version: "0.3.0",
+  version: "0.3.2",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",

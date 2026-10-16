@@ -1,6 +1,6 @@
 {
   "name": "zeekr-shortcut-sentrymode-on",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Turns on Zeekr sentry mode when the car is parked outside your geofences (Cloudflare Workers)",

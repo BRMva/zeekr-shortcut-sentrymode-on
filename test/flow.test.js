@@ -36,9 +36,17 @@ function kv() {
   };
 }
 
+// What the TSP gateway answers once the bearer token is no longer valid.
+const SESSION_LOST = {
+  expiry: { success: false, msg: "Token expired" },
+  "a login elsewhere": { success: false, code: "079021", msg: "The account is currently logged in elsewhere." },
+};
+
 let car;
 let calls;
+let logs;
 let tokenValid;
+let lostBy;
 
 function fakeApi(url, init) {
   const u = new URL(url);
@@ -60,7 +68,7 @@ function fakeApi(url, init) {
     return ok({ accessToken: "BEARER" });
   }
   if (u.host === "sea-snc-tsp-api-gw.zeekrlife.com" && (!tokenValid || auth !== "BEARER")) {
-    return new Response(JSON.stringify({ success: false, msg: "Token expired" }));
+    return new Response(JSON.stringify(SESSION_LOST[lostBy]));
   }
   if (p.endsWith("/vehicle-list")) return ok([{ vin: "VIN0000000000ABC123" }]);
   if (p.endsWith("/status/latest")) {
@@ -83,10 +91,12 @@ const sent = () => calls.filter((c) => c.endsWith("/remoteControl/control")).len
 
 beforeEach(() => {
   calls = [];
+  logs = [];
   tokenValid = false;
+  lostBy = "expiry";
   car = { engine: "engine-off", lat: 1.35, lon: 103.85, sentry: false };
   globalThis.fetch = async (url, init) => fakeApi(url, init);
-  console.log = () => {};
+  console.log = (line) => logs.push(line);
 });
 
 test("first tick logs in once and turns sentry on away from home", async () => {
@@ -117,26 +127,36 @@ test("dry run reads but does not send or remember", async () => {
   assert.equal(state.m.has("parking:VIN0000000000ABC123"), false);
 });
 
-test("expired token: logs in again once and carries on", async () => {
-  const state = kv();
-  await run(env(state));
-  state.m.set("lastLogin", "0");
-  tokenValid = false;
-  calls = [];
-  car = { engine: "engine-off", lat: 1.4, lon: 103.9, sentry: false };
-  await run(env(state));
-  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
-  assert.equal(sent(), 1);
-});
+for (const [why, said] of [
+  ["expiry", /token expired, logging in again/],
+  ["a login elsewhere", /signed out: the account logged in elsewhere .*, logging in again/],
+]) {
+  test(`session ended by ${why}: logs in again once, says why, and carries on`, async () => {
+    const state = kv();
+    await run(env(state));
+    state.m.set("lastLogin", "0");
+    tokenValid = false;
+    lostBy = why;
+    calls = [];
+    logs = [];
+    car = { engine: "engine-off", lat: 1.4, lon: 103.9, sentry: false };
+    await run(env(state));
+    assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+    assert.equal(sent(), 1);
+    assert.ok(logs.some((l) => said.test(l)), logs.join("\n"));
+    assert.ok(!logs.some((l) => / error: /.test(l)), logs.join("\n"));
+  });
 
-test("expired token within the hold-back: no second login", async () => {
-  const state = kv();
-  await run(env(state));
-  tokenValid = false;
-  calls = [];
-  await assert.rejects(run(env(state)), /held back/);
-  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 0);
-});
+  test(`session ended by ${why} within the hold-back: no second login`, async () => {
+    const state = kv();
+    await run(env(state));
+    tokenValid = false;
+    lostBy = why;
+    calls = [];
+    await assert.rejects(run(env(state)), /held back/);
+    assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 0);
+  });
+}
 
 test("missing secrets are named", async () => {
   await assert.rejects(run({ STATE: kv() }), /missing: ZEEKR_EMAIL, ZEEKR_PASSWORD/);

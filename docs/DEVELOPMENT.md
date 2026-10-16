@@ -24,7 +24,7 @@ changing `src/` (`npm run build`); `npm test` fails while it is stale.
 |---|---|
 | `ZEEKR_EMAIL` | a second Zeekr account the car is shared with |
 | `ZEEKR_PASSWORD` | its password |
-| `GEOFENCES` | up to 10 places, separated by `;` or new lines, each `name, latitude, longitude, radius in metres` (radius optional, default 600). Required; `none` for no places |
+| `GEOFENCES` | up to 10 places, separated by `;` or new lines, each `name, latitude, longitude, radius in metres` (radius optional, default 600). Full-width input from a Chinese or Japanese keyboard (`，；．－`, digits, `、。`) is read as ASCII. Required; `none` for no places |
 | `DRY_RUN` | optional, `true` = log the decision, never send the command |
 
 The Deploy to Cloudflare page asks for the entries in `.dev.vars.example`, with the descriptions in
