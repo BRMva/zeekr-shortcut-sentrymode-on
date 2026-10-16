@@ -26,16 +26,16 @@
   "cloudflare": {
     "bindings": {
       "ZEEKR_EMAIL": {
-        "description": "极氪副账号的邮箱：先在极氪 App 里把车分享给这个账号。不要用手机上正在登录的主账号，否则手机会被登出。 / Email of a second Zeekr account the car is shared with — not the one on your phone, or the phone gets signed out."
+        "description": "Email of a second Zeekr account that your car is shared with. Not the account in your phone's Zeekr app, or the app gets signed out."
       },
       "ZEEKR_PASSWORD": {
-        "description": "上面这个副账号的密码。 / Password of that account."
+        "description": "Password of that second account."
       },
       "GEOFENCES": {
-        "description": "不自动开哨兵的地点，最多 10 个，用英文分号隔开；每个写：名称, 纬度, 经度, 半径米（默认 600）。例：Home, 1.3521, 103.8198, 600 / Up to 10 places, separated by ; each: name, latitude, longitude, radius in metres"
+        "description": "Places where sentry mode is never turned on, up to 10, separated by semicolons. Each: name, latitude, longitude, radius in metres (default 600). Example: Home, 1.3521, 103.8198, 600"
       },
       "STATE": {
-        "description": "程序自动创建的存储，保持默认即可。 / Storage the program creates for itself; keep the default."
+        "description": "Storage for the sign-in session and the current parking. Keep new."
       }
     }
   },

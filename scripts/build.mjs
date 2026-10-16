@@ -14,11 +14,12 @@ export const DIST = join(root, "dist", "zeekr-sentry.js");
 export async function bundle() {
   const banner = [
     `// ${ABOUT.name} ${ABOUT.version} — ${ABOUT.repo} (${ABOUT.license}) by ${ABOUT.author}`,
-    "// 极氪哨兵自动开启：车停好、锁上，且不在你设定的地点附近时，自动打开哨兵模式。",
-    "// 单文件版本：在 Cloudflare 控制台新建 Worker，把本文件全部内容粘贴进代码编辑器，步骤见 docs/setup-zh.md。",
+    "// Turns Zeekr sentry mode on when the car is parked and locked away from your places.",
+    "// Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code",
+    "// editor. Step by step: docs/setup-manual.md in the repository above.",
     "// Based on:",
     ...ABOUT.credits.map((c) => `//   ${c}`),
-    "// Single-file build of src/ (npm run build). Paste all of it into the Worker's code editor; do not edit by hand.",
+    "// Built from src/ (npm run build); do not edit by hand.",
   ].join("\n");
   const result = await build({
     entryPoints: [join(root, "src", "index.js")],
