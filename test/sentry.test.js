@@ -5,22 +5,35 @@ import { MAX_ATTEMPTS, decide, distanceM, parseGeofences, readCar } from "../src
 const HOME = { name: "Home", lat: 1.3, lon: 103.8, radius_m: 200 };
 const cfg = { fences: [HOME] };
 const away = { lat: 1.35, lon: 103.85 };
-const car = (o = {}) => ({ engine: "engine-off", parked: true, position: away, locked: true, battery: 80, sentry: false, ...o });
+const car = (o = {}) => ({ gear: "P", speed: 0, driving: null, position: away, battery: 80, sentry: false, ...o });
+const status = (basic, running) => ({
+  basicVehicleStatus: { position: { latitude: "1.35", longitude: "103.85" }, ...basic },
+  additionalVehicleStatus: { drivingBehaviourStatus: running, electricVehicleStatus: { chargeLevel: "76" } },
+});
 
 test("readCar maps the API fields", () => {
-  const c = readCar(
-    {
-      basicVehicleStatus: { engineStatus: "engine-off", position: { latitude: "1.35", longitude: "103.85" } },
-      additionalVehicleStatus: { drivingSafetyStatus: { centralLockingStatus: "1" }, electricVehicleStatus: { chargeLevel: "76" } },
-    },
-    { vstdModeState: "0" },
-  );
-  assert.deepEqual(c, { engine: "engine-off", parked: true, position: away, locked: true, battery: 76, sentry: false });
+  // drivingBehaviourStatus as the car reports it when parked.
+  const c = readCar(status({ speed: "0.0" }, { transimissionGearPostion: "", gearAutoStatus: "0", gearManualStatus: "" }), { vstdModeState: "0" });
+  assert.deepEqual(c, { gear: "P", speed: 0, usage: null, driving: null, position: away, battery: 76, sentry: false });
+  assert.equal(readCar(status({ usageMode: 1 }, {}), null).usage, "1");
   const unknown = readCar({ basicVehicleStatus: { position: { latitude: "0", longitude: "0" } } }, null);
-  assert.equal(unknown.parked, false);
+  assert.equal(unknown.driving, "gear unknown");
+  assert.equal(unknown.gear, null);
+  assert.equal(unknown.speed, null);
   assert.equal(unknown.position, null);
   assert.equal(unknown.sentry, null);
-  assert.equal(unknown.locked, null);
+});
+
+test("parked means in P; neither a stray speed nor the (lagging) engine status counts", () => {
+  const driving = (basic, running) => readCar(status(basic, running), null).driving;
+  assert.equal(driving({ engineStatus: "engine-running", speed: "0" }, { gearAutoStatus: "0" }), null);
+  assert.equal(driving({ speed: "0" }, { gearAutoStatus: 0 }), null);
+  assert.equal(driving({}, { gearAutoStatus: "0" }), null);
+  // Seen on a car charging at home: in P, reporting 7 km/h.
+  assert.equal(driving({ speed: "7" }, { gearAutoStatus: "0" }), null);
+  assert.equal(driving({ engineStatus: "engine-off", speed: "0" }, { gearAutoStatus: "3" }), "gear 3");
+  assert.equal(driving({ engineStatus: "engine-off" }, undefined), "gear unknown");
+  assert.equal(driving({ speed: "8" }, {}), "gear unknown");
 });
 
 test("distance is roughly right", () => {
@@ -28,7 +41,7 @@ test("distance is roughly right", () => {
   assert.ok(d > 110 && d < 112);
 });
 
-test("parked away from fences, locked, sentry off -> enable", () => {
+test("parked away from fences, sentry off -> enable", () => {
   const r = decide(car(), null, cfg, 1000);
   assert.equal(r.action, "enable");
   assert.equal(r.parking.attempts, 1);
@@ -43,9 +56,10 @@ test("inside geofence -> leave alone, no attempt used", () => {
 });
 
 test("driving clears the parking", () => {
-  const r = decide(car({ engine: "engine-running", parked: false }), { attempts: 2 }, cfg);
+  const r = decide(car({ gear: "3", speed: 35, driving: "gear 3" }), { attempts: 2 }, cfg);
   assert.equal(r.parking, null);
   assert.equal(r.action, "none");
+  assert.equal(r.reason, "not parked (gear 3)");
 });
 
 test("gives up after MAX_ATTEMPTS in one parking", () => {
@@ -57,6 +71,7 @@ test("gives up after MAX_ATTEMPTS in one parking", () => {
     p = r.parking;
   }
   assert.equal(sent, MAX_ATTEMPTS);
+  assert.equal(MAX_ATTEMPTS, 6);
 });
 
 test("once seen on, a later off is respected", () => {
@@ -75,14 +90,22 @@ test("moving to a new spot without being seen driving starts a new parking", () 
   assert.equal(r.parking.seenOn, false);
 });
 
-test("waits for lock, enough battery, known sentry state and position", () => {
-  assert.equal(decide(car({ locked: false }), null, cfg).action, "none");
-  assert.equal(decide(car({ locked: null }), null, cfg).action, "enable");
+test("waits for enough battery, known sentry state and position", () => {
   assert.equal(decide(car({ battery: 15 }), null, cfg).action, "none");
   assert.equal(decide(car({ battery: null }), null, cfg).action, "enable");
   assert.equal(decide(car({ sentry: null }), null, cfg).action, "none");
   assert.equal(decide(car({ position: null }), null, cfg).action, "none");
   assert.equal(decide(car({ position: null }), null, { fences: [] }).action, "enable");
+});
+
+test("while the car is in use (switched on, someone in it) it waits, without using an attempt", () => {
+  let r = decide(car({ usage: "13" }), null, cfg);
+  assert.equal(r.action, "none");
+  assert.equal(r.reason, "car in use (usage 13)");
+  assert.equal(r.parking.attempts, 0);
+  r = decide(car({ usage: "4" }), r.parking, cfg);
+  assert.equal(r.action, "none");
+  for (const usage of ["0", "1", "2", null]) assert.equal(decide(car({ usage }), r.parking, cfg).action, "enable", usage);
 });
 
 test("geofences: one place per line or per ';', name and radius optional", () => {

@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "zeekr-sentry",
+  // The repository's name: Cloudflare names a Worker built from a fork after the repository, and
+  // Workers Builds only deploys when this name matches the Worker's.
+  "name": "zeekr-shortcut-sentrymode-on",
   "main": "src/index.js",
   "compatibility_date": "2026-09-01",
   // No compatibility flags: the code uses Web APIs only, so the single-file version
@@ -13,16 +15,16 @@
   // Every 5 minutes (UTC cron syntax). Same cadence as the Home Assistant integration.
   "triggers": { "crons": ["*/5 * * * *"] },
 
-  // Login session and parking state. Created on the first deploy (Deploy to Cloudflare
-  // button or `wrangler deploy`); later deploys reuse it because the Worker already has
-  // a binding called STATE.
+  // Login session and parking state. Created on the first deploy (the build of an imported
+  // fork, or `wrangler deploy`) as zeekr-shortcut-sentrymode-on-state; later deploys reuse it
+  // because the Worker already has a binding called STATE.
   "kv_namespaces": [{ "binding": "STATE" }],
 
-  // Logs in the dashboard: Workers & Pages → zeekr-sentry → Logs.
+  // Logs in the dashboard: Workers & Pages → zeekr-shortcut-sentrymode-on → Logs.
   "observability": { "enabled": true },
 
-  // Settings are secrets, asked for on the Deploy to Cloudflare page: ZEEKR_EMAIL,
-  // ZEEKR_PASSWORD, GEOFENCES (see .dev.vars.example). Variables added later in the
-  // dashboard are kept when the Worker is redeployed.
+  // Settings are secrets added in the Worker's settings after the first deploy: ZEEKR_EMAIL,
+  // ZEEKR_PASSWORD, GEOFENCES (see .dev.vars.example). Variables added in the dashboard are
+  // kept when the Worker is redeployed (Sync fork).
   "keep_vars": true
 }

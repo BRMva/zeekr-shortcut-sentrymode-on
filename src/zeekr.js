@@ -3,20 +3,49 @@
 
 import { appSignature, encryptPassword, encryptVin, gatewayHeaders } from "./crypto.js";
 
-// The SEA gateway serves the region list and a user directory shared by the SEA, UAE and
-// LA regions. Europe runs a separate gateway that needs other app keys, so it is not supported.
-const SEA_APP_SERVER = "https://gateway-pub-hw-em-sg.zeekrlife.com/overseas-app/";
-const SEA_USER_CENTER = "https://gateway-pub-hw-em-sg.zeekrlife.com/zeekr-cuc-idaas-sea/";
+// Zeekr's overseas servers come in two families, and each gateway answers only its own family's
+// app keys:
+//   EM: Southeast Asia, the Middle East and Latin America. One user directory, and a region list
+//       that names each country's servers. The built-in keys are EM's.
+//   EU: Europe. One set of servers for every country; the keys come from the European app.
+// The keys in use decide which family answers, and its directory says where the account is.
+// `country` is what the gateway headers carry: AU as zeekr_ev_api sends it, SE as openzeekr does.
+const EU_GATEWAY = "https://gateway-pub-azure.zeekr.eu/";
+const FAMILIES = [
+  {
+    name: "EM",
+    area: "Southeast Asia, the Middle East or Latin America",
+    appServer: "https://gateway-pub-hw-em-sg.zeekrlife.com/overseas-app/",
+    userCenter: "https://gateway-pub-hw-em-sg.zeekrlife.com/zeekr-cuc-idaas-sea/",
+    country: "AU",
+  },
+  {
+    name: "EU",
+    area: "Europe",
+    appServer: `${EU_GATEWAY}overseas-app/`,
+    userCenter: `${EU_GATEWAY}zeekr-cuc-idaas/`,
+    country: "SE",
+    // One set of servers for every country, in the shape of a region-list entry.
+    servers: {
+      regionCode: "EU",
+      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/`, messageCoreUrl: `${EU_GATEWAY}eu-message-core/` },
+    },
+  },
+];
 
 const LOGIN_SERVERS = {
   SEA: "https://sea-snc-tsp-api-gw.zeekrlife.com/",
   UAE: "https://me-snc-tsp-api-gw.zeekrlife.com/",
   LA: "https://la-snc-tsp-api-gw.zeekrlife.com/",
+  EU: "https://eu-snc-tsp-api-gw.zeekrlife.com/",
 };
+
+// X-PROJECT-ID, as zeekr_ev_api and openzeekr both send it; any other region gets ZEEKR_SEA.
+const PROJECT_IDS = { LA: "ZEEKR_LA", EU: "ZEEKR_EU" };
 
 const CLIENT_ID = "1JwLroFkFFIpgFGdTRrm4_nzkkwDkfHj7RxJQb7J8tc";
 
-// The library sends these as-is for every country (country/registcountry stay "AU").
+// Sent as-is to every gateway, with the family's country and registcountry added.
 const GATEWAY_HEADERS = {
   "accept-language": "en-AU",
   "app-authorization": "1003",
@@ -28,13 +57,11 @@ const GATEWAY_HEADERS = {
   "call-source": "android",
   "client-id": CLIENT_ID,
   "Content-Type": "application/json; charset=UTF-8",
-  country: "AU",
   "device-name": "sdk_gphone64_x86_64",
   "device-type": "app",
   language: "en",
   msgappid: "11002",
   msgclientid: "1003",
-  registcountry: "AU",
   "tmp-tenant-code": "3300743799505195008",
   "user-agent": "Device/GoogleAppName/com.zeekr.globalAppVersion/1.4.1Platform/androidOSVersion/16Ditto/true",
 };
@@ -64,6 +91,15 @@ async function readJson(resp) {
 
 const brief = (r) => JSON.stringify({ code: r?.code, msg: r?.msg, status: r?.status, error: r?.error });
 
+// Why no family knew the account. `rejected`: the families whose gateway refused the keys.
+function noAccount(rejected) {
+  if (rejected.length === FAMILIES.length) return "Zeekr does not accept the app keys (HMAC_ACCESS_KEY, HMAC_SECRET_KEY)";
+  const searched = FAMILIES.filter((f) => !rejected.includes(f.name));
+  const where = searched.length === 1 ? ` in ${searched[0].area}` : "";
+  const europe = rejected.includes("EU") ? "; a European account needs the keys of the European Zeekr app (see the README)" : "";
+  return `no Zeekr account with this email${where}${europe}`;
+}
+
 export class ZeekrClient {
   // secrets: { email, password, hmacAccessKey, hmacSecretKey, passwordPublicKey, prodSecret, vinKey, vinIv }
   // session: the object returned by login(), persisted by the caller
@@ -75,7 +111,12 @@ export class ZeekrClient {
   // ---- transport ----
 
   async gateway(method, url, body) {
-    const headers = { ...GATEWAY_HEADERS, ...(await gatewayHeaders(method, url, this.s.hmacAccessKey, this.s.hmacSecretKey)) };
+    const headers = {
+      ...GATEWAY_HEADERS,
+      country: this.family.country,
+      registcountry: this.family.country,
+      ...(await gatewayHeaders(method, url, this.s.hmacAccessKey, this.s.hmacSecretKey)),
+    };
     if (this.authToken) headers.authorization = this.authToken;
     const resp = await fetch(url, {
       method,
@@ -122,18 +163,32 @@ export class ZeekrClient {
     const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID() };
     this.authToken = null;
 
-    const urls = await this.gateway("GET", `${SEA_APP_SERVER}region/url`);
-    if (!urls.success) throw new ZeekrError(`region lookup failed ${brief(urls)}`);
-
+    // Each family in turn: its region list (a gateway refusing the keys answers 0001 "Invalid access
+    // key"), then its user directory. The first family that knows the email is the account's.
     const checkUser = (userCenter) => this.gateway("POST", `${userCenter}auth/checkUserV2`, { email: this.s.email, checkType: "1" });
-    const who = await checkUser(SEA_USER_CENTER);
-    if (!who.success) throw new ZeekrError(`user check failed ${brief(who)}`);
-    if (who.data?.status !== 1 || !who.data?.registerCountry) {
-      throw new ZeekrError("no Zeekr account with this email in the SEA, UAE or LA regions (Europe is not supported)");
+    const rejected = [];
+    let urls;
+    let who = null;
+    for (const family of FAMILIES) {
+      this.family = family;
+      urls = await this.gateway("GET", `${family.appServer}region/url`);
+      if (urls.code === "0001") {
+        rejected.push(family.name);
+        continue;
+      }
+      if (!urls.success) throw new ZeekrError(`region lookup failed ${brief(urls)}`);
+      const check = await checkUser(family.userCenter);
+      if (!check.success) throw new ZeekrError(`user check failed ${brief(check)}`);
+      if (check.data?.status === 1 && check.data?.registerCountry) {
+        who = check;
+        break;
+      }
     }
+    if (!who) throw new ZeekrError(noAccount(rejected));
     ss.country = who.data.registerCountry;
 
-    const block = (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
+    // EM names each country's servers in its region list; EU has one set for every country.
+    const block = this.family.servers ?? (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
     ss.appServer = block?.url?.appServerUrl ?? "";
     ss.userCenter = block?.url?.userCenterUrl ?? "";
     ss.messageCore = block?.url?.messageCoreUrl ?? "";
@@ -143,9 +198,9 @@ export class ZeekrClient {
       throw new ZeekrError(`accounts registered in ${ss.country} are not supported (region ${ss.region || "unknown"})`);
     }
     for (const k of ["appServer", "userCenter", "messageCore"]) if (!ss[k].endsWith("/")) ss[k] += "/";
-    ss.projectId = ss.region === "LA" ? "ZEEKR_LA" : "ZEEKR_SEA";
+    ss.projectId = PROJECT_IDS[ss.region] ?? "ZEEKR_SEA";
 
-    if (ss.userCenter !== SEA_USER_CENTER) {
+    if (ss.userCenter !== this.family.userCenter) {
       const check = await checkUser(ss.userCenter);
       if (!check.success) throw new ZeekrError(`user check failed ${brief(check)}`);
     }

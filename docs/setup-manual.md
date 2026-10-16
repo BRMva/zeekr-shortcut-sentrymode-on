@@ -1,9 +1,10 @@
 # Setup with a Cloudflare account only (no GitHub)
 
 For when you don't have a GitHub account: create a Worker in the Cloudflare dashboard, paste the program in, and set a
-few things by hand. The result is the same as the one-click setup: it checks your car every 5 minutes.
+few things by hand. The result is the same as the [setup with GitHub](../README.md#set-up-step-by-step): it checks
+your car every 5 minutes.
 
-If you have a GitHub account, the [one-click setup](../README.md#one-click-setup-step-by-step) has fewer steps.
+If you have a GitHub account, the setup with GitHub has fewer steps, and upgrading there is one click.
 
 **Before you start,** prepare the second Zeekr account and your places as described in
 [Before you start](../README.md#before-you-start-four-things-to-prepare) (you can skip the GitHub account).
@@ -17,8 +18,8 @@ In the Cloudflare dashboard, open **Compute** → **Workers & Pages** and click 
 
 ![Workers & Pages, then Create application](images/create-application.jpg)
 
-On the next page choose **Start with Hello World!**, name the Worker `zeekr-sentry`, then click **Deploy**.
-Don't choose **Upload your static files**: that is for static websites, and the program would not run.
+On the next page choose **Start with Hello World!**, name the Worker `zeekr-shortcut-sentrymode-on`, then click
+**Deploy**. Don't choose **Upload your static files**: that is for static websites, and the program would not run.
 
 ## Step 2: Paste the program in
 
@@ -38,8 +39,8 @@ the settings that are still missing, which means the program is running.
 
 ## Step 3: Create the storage space and connect it
 
-1. In the left menu, open **Storage & databases** → **Workers KV** and click **Create a KV namespace**. Name it as you
-   like, for example `zeekr-sentry-state`, and create it.
+1. In the left menu, open **Storage & databases** → **Workers KV** and click **Create a KV namespace**. Name it
+   `zeekr-shortcut-sentrymode-on-state` (any name works; this one matches the rest of the guide) and create it.
 
    ![Workers KV, then Create a KV namespace](images/kv-list.jpg)
 
@@ -60,14 +61,17 @@ A new schedule can take up to 15 minutes to start.
 
 ## Step 5: Add the three settings
 
-On the Worker's **Settings** page, under **Runtime variables and secrets**, click **Add variable** (3 in the Step 3
-picture). Add these three, each with the type **Secret**, then click **Deploy**:
+On the Worker's **Settings** page, under **Runtime variables and secrets**, click **+ Add variable** (3 in the Step 3
+picture). Fill in a row for each of the three settings: the name in **Key**, the value in **Value**, and tick
+**Secret**; **+ Add** gives you the next row. Then click **Add variable and deploy**.
 
-| Name | Value |
+| Key | Value |
 |---|---|
 | `ZEEKR_EMAIL` | the second account's email address |
 | `ZEEKR_PASSWORD` | the second account's password |
 | `GEOFENCES` | your places, for example `Home, 1.3521, 103.8198, 600` |
+
+![Key, Value and Secret; + Add for the next row; then Add variable and deploy](images/add-variables.jpg)
 
 ## Step 6: Check that it runs
 
@@ -84,9 +88,9 @@ and can be ignored.
 
 ## After that
 
-Reading the log, changing settings, pausing, uninstalling and the FAQ are the same as for the one-click setup: see
+Reading the log, changing settings, pausing, uninstalling and the FAQ are the same as for the setup with GitHub: see
 [Everyday use](../README.md#everyday-use) and [FAQ](../README.md#faq). Two differences:
 
-- **Uninstalling:** there is no GitHub repository to delete.
-- **Upgrading:** copy the new version of the file as in step 2, replace everything in **Edit code** and click
-  **Deploy**. Your settings stay as they are.
+- **Uninstalling:** there is no fork to delete, and no GitHub access to take back.
+- **Upgrading:** when the log says `version … is available …`, copy the new version of the file as in step 2, replace
+  everything in **Edit code** and click **Deploy**. Your settings stay as they are.

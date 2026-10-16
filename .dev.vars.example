@@ -1,6 +1,7 @@
-# The three settings. The Deploy to Cloudflare page asks for each of them (descriptions
-# are in package.json). For a run on your PC, copy this file to .dev.vars and fill it in;
-# .dev.vars is git-ignored. On GitHub Actions, set them in the repository settings instead.
+# The three settings. In Cloudflare, add each of them as a secret: the Worker's Settings ->
+# Runtime variables and secrets -> Add variable (README, step 4). For a run on your PC, copy
+# this file to .dev.vars and fill it in; .dev.vars is git-ignored. On GitHub Actions, set
+# them in the repository settings instead.
 
 # A second Zeekr account the car is shared with (not the one on your phone).
 ZEEKR_EMAIL=

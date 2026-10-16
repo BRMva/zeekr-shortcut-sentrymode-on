@@ -1,4 +1,4 @@
-// zeekr-sentry 0.3.2 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
+// zeekr-sentry 0.4.2 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
 // Turns Zeekr sentry mode on when the car is parked and locked away from your places.
 // Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code
 // editor. Step by step: docs/setup-manual.md in the repository above.
@@ -6,19 +6,21 @@
 //   Fryyyyy/zeekr_ev_api (MIT): Zeekr API, login and request signing
 //   Fryyyyy/zeekr_homeassistant (MIT): sentry command and status fields
 //   wysie/zeekr_key_extractor (MIT): app constants from the public Zeekr app
+//   borconi/openzeekr (MIT): the European servers
 // Built from src/ (npm run build); do not edit by hand.
 
 // src/about.js
 var ABOUT = {
   name: "zeekr-sentry",
-  version: "0.3.2",
+  version: "0.4.2",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
   credits: [
     "Fryyyyy/zeekr_ev_api (MIT): Zeekr API, login and request signing",
     "Fryyyyy/zeekr_homeassistant (MIT): sentry command and status fields",
-    "wysie/zeekr_key_extractor (MIT): app constants from the public Zeekr app"
+    "wysie/zeekr_key_extractor (MIT): app constants from the public Zeekr app",
+    "borconi/openzeekr (MIT): the European servers"
   ]
 };
 var TAG = `[v${ABOUT.version}]`;
@@ -286,13 +288,35 @@ function encryptPassword(password, publicKeyB64) {
 }
 
 // src/zeekr.js
-var SEA_APP_SERVER = "https://gateway-pub-hw-em-sg.zeekrlife.com/overseas-app/";
-var SEA_USER_CENTER = "https://gateway-pub-hw-em-sg.zeekrlife.com/zeekr-cuc-idaas-sea/";
+var EU_GATEWAY = "https://gateway-pub-azure.zeekr.eu/";
+var FAMILIES = [
+  {
+    name: "EM",
+    area: "Southeast Asia, the Middle East or Latin America",
+    appServer: "https://gateway-pub-hw-em-sg.zeekrlife.com/overseas-app/",
+    userCenter: "https://gateway-pub-hw-em-sg.zeekrlife.com/zeekr-cuc-idaas-sea/",
+    country: "AU"
+  },
+  {
+    name: "EU",
+    area: "Europe",
+    appServer: `${EU_GATEWAY}overseas-app/`,
+    userCenter: `${EU_GATEWAY}zeekr-cuc-idaas/`,
+    country: "SE",
+    // One set of servers for every country, in the shape of a region-list entry.
+    servers: {
+      regionCode: "EU",
+      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/`, messageCoreUrl: `${EU_GATEWAY}eu-message-core/` }
+    }
+  }
+];
 var LOGIN_SERVERS = {
   SEA: "https://sea-snc-tsp-api-gw.zeekrlife.com/",
   UAE: "https://me-snc-tsp-api-gw.zeekrlife.com/",
-  LA: "https://la-snc-tsp-api-gw.zeekrlife.com/"
+  LA: "https://la-snc-tsp-api-gw.zeekrlife.com/",
+  EU: "https://eu-snc-tsp-api-gw.zeekrlife.com/"
 };
+var PROJECT_IDS = { LA: "ZEEKR_LA", EU: "ZEEKR_EU" };
 var CLIENT_ID = "1JwLroFkFFIpgFGdTRrm4_nzkkwDkfHj7RxJQb7J8tc";
 var GATEWAY_HEADERS = {
   "accept-language": "en-AU",
@@ -305,13 +329,11 @@ var GATEWAY_HEADERS = {
   "call-source": "android",
   "client-id": CLIENT_ID,
   "Content-Type": "application/json; charset=UTF-8",
-  country: "AU",
   "device-name": "sdk_gphone64_x86_64",
   "device-type": "app",
   language: "en",
   msgappid: "11002",
   msgclientid: "1003",
-  registcountry: "AU",
   "tmp-tenant-code": "3300743799505195008",
   "user-agent": "Device/GoogleAppName/com.zeekr.globalAppVersion/1.4.1Platform/androidOSVersion/16Ditto/true"
 };
@@ -334,6 +356,13 @@ async function readJson(resp) {
   }
 }
 var brief = (r) => JSON.stringify({ code: r?.code, msg: r?.msg, status: r?.status, error: r?.error });
+function noAccount(rejected) {
+  if (rejected.length === FAMILIES.length) return "Zeekr does not accept the app keys (HMAC_ACCESS_KEY, HMAC_SECRET_KEY)";
+  const searched = FAMILIES.filter((f) => !rejected.includes(f.name));
+  const where = searched.length === 1 ? ` in ${searched[0].area}` : "";
+  const europe = rejected.includes("EU") ? "; a European account needs the keys of the European Zeekr app (see the README)" : "";
+  return `no Zeekr account with this email${where}${europe}`;
+}
 var ZeekrClient = class {
   // secrets: { email, password, hmacAccessKey, hmacSecretKey, passwordPublicKey, prodSecret, vinKey, vinIv }
   // session: the object returned by login(), persisted by the caller
@@ -343,7 +372,12 @@ var ZeekrClient = class {
   }
   // ---- transport ----
   async gateway(method, url, body) {
-    const headers = { ...GATEWAY_HEADERS, ...await gatewayHeaders(method, url, this.s.hmacAccessKey, this.s.hmacSecretKey) };
+    const headers = {
+      ...GATEWAY_HEADERS,
+      country: this.family.country,
+      registcountry: this.family.country,
+      ...await gatewayHeaders(method, url, this.s.hmacAccessKey, this.s.hmacSecretKey)
+    };
     if (this.authToken) headers.authorization = this.authToken;
     const resp = await fetch(url, {
       method,
@@ -386,16 +420,28 @@ var ZeekrClient = class {
   async login() {
     const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID() };
     this.authToken = null;
-    const urls = await this.gateway("GET", `${SEA_APP_SERVER}region/url`);
-    if (!urls.success) throw new ZeekrError(`region lookup failed ${brief(urls)}`);
     const checkUser = (userCenter) => this.gateway("POST", `${userCenter}auth/checkUserV2`, { email: this.s.email, checkType: "1" });
-    const who = await checkUser(SEA_USER_CENTER);
-    if (!who.success) throw new ZeekrError(`user check failed ${brief(who)}`);
-    if (who.data?.status !== 1 || !who.data?.registerCountry) {
-      throw new ZeekrError("no Zeekr account with this email in the SEA, UAE or LA regions (Europe is not supported)");
+    const rejected = [];
+    let urls;
+    let who = null;
+    for (const family of FAMILIES) {
+      this.family = family;
+      urls = await this.gateway("GET", `${family.appServer}region/url`);
+      if (urls.code === "0001") {
+        rejected.push(family.name);
+        continue;
+      }
+      if (!urls.success) throw new ZeekrError(`region lookup failed ${brief(urls)}`);
+      const check = await checkUser(family.userCenter);
+      if (!check.success) throw new ZeekrError(`user check failed ${brief(check)}`);
+      if (check.data?.status === 1 && check.data?.registerCountry) {
+        who = check;
+        break;
+      }
     }
+    if (!who) throw new ZeekrError(noAccount(rejected));
     ss.country = who.data.registerCountry;
-    const block = (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
+    const block = this.family.servers ?? (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
     ss.appServer = block?.url?.appServerUrl ?? "";
     ss.userCenter = block?.url?.userCenterUrl ?? "";
     ss.messageCore = block?.url?.messageCoreUrl ?? "";
@@ -405,8 +451,8 @@ var ZeekrClient = class {
       throw new ZeekrError(`accounts registered in ${ss.country} are not supported (region ${ss.region || "unknown"})`);
     }
     for (const k of ["appServer", "userCenter", "messageCore"]) if (!ss[k].endsWith("/")) ss[k] += "/";
-    ss.projectId = ss.region === "LA" ? "ZEEKR_LA" : "ZEEKR_SEA";
-    if (ss.userCenter !== SEA_USER_CENTER) {
+    ss.projectId = PROJECT_IDS[ss.region] ?? "ZEEKR_SEA";
+    if (ss.userCenter !== this.family.userCenter) {
       const check = await checkUser(ss.userCenter);
       if (!check.success) throw new ZeekrError(`user check failed ${brief(check)}`);
     }
@@ -474,22 +520,26 @@ var ZeekrClient = class {
 
 // src/sentry.js
 var NEW_PARKING_M = 300;
-var MAX_ATTEMPTS = 3;
+var MAX_ATTEMPTS = 6;
 var MIN_BATTERY = 20;
+var IN_USE = /* @__PURE__ */ new Set(["4", "13"]);
 var num = (v) => v === void 0 || v === null || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
 function readCar(status, remoteState) {
   const basic = status.basicVehicleStatus ?? {};
   const extra = status.additionalVehicleStatus ?? {};
   const lat = num(basic.position?.latitude);
   const lon = num(basic.position?.longitude);
-  const lock = extra.drivingSafetyStatus?.centralLockingStatus;
   const sentry = remoteState?.vstdModeState;
-  const engine = String(basic.engineStatus ?? "").toLowerCase();
+  const gear = num(extra.drivingBehaviourStatus?.gearAutoStatus);
+  const speed = num(basic.speed);
+  const usage = basic.usageMode;
   return {
-    engine: engine || "unknown",
-    parked: engine === "engine-off" || engine === "charging",
+    gear: gear === null ? null : gear === 0 ? "P" : String(gear),
+    speed,
+    usage: usage === void 0 || usage === null || usage === "" ? null : String(usage),
+    // Why the car counts as driving, or null when it is parked.
+    driving: gear === null ? "gear unknown" : gear === 0 ? null : `gear ${gear}`,
     position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
-    locked: lock === void 0 || lock === null ? null : String(lock) === "1",
     battery: num(extra.electricVehicleStatus?.chargeLevel),
     sentry: sentry === void 0 || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase())
   };
@@ -523,7 +573,7 @@ function parseGeofences(text) {
   });
 }
 function decide(car, parking, { fences }, now = Date.now()) {
-  if (!car.parked) return { parking: null, action: "none", reason: `not parked (${car.engine})` };
+  if (car.driving) return { parking: null, action: "none", reason: `not parked (${car.driving})` };
   const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
   const p = !parking || moved ? { since: now, position: car.position, attempts: 0, seenOn: false } : { ...parking };
   if (!p.position && car.position) p.position = car.position;
@@ -538,10 +588,10 @@ function decide(car, parking, { fences }, now = Date.now()) {
     const fence = insideFence(car.position, fences);
     if (fence) return { parking: p, action: "none", reason: `inside geofence "${fence.name}"` };
   }
-  if (car.locked === false) return { parking: p, action: "none", reason: "not locked yet" };
   if (car.battery !== null && car.battery < MIN_BATTERY) {
     return { parking: p, action: "none", reason: `battery ${car.battery}% below ${MIN_BATTERY}%` };
   }
+  if (IN_USE.has(car.usage)) return { parking: p, action: "none", reason: `car in use (usage ${car.usage})` };
   if (p.attempts >= MAX_ATTEMPTS) return { parking: p, action: "none", reason: `gave up after ${MAX_ATTEMPTS} attempts` };
   p.attempts += 1;
   return { parking: p, action: "enable", reason: `attempt ${p.attempts}/${MAX_ATTEMPTS}` };
@@ -588,7 +638,24 @@ async function run(env) {
     log(`${err.message}, logging in again`);
     await ensureSession(client, env, config, true);
     await checkCars(client, env, config, done);
+  } finally {
+    await announceUpdate();
   }
+}
+var LATEST = ABOUT.repo.replace("https://github.com/", "https://raw.githubusercontent.com/") + "/main/package.json";
+async function announceUpdate(now = Date.now()) {
+  const t = new Date(now);
+  if (t.getUTCHours() !== 0 || t.getUTCMinutes() >= 5) return;
+  try {
+    const { version } = await (await fetch(LATEST, { signal: AbortSignal.timeout(1e4) })).json();
+    if (newer(version, ABOUT.version)) log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+  } catch {
+  }
+}
+function newer(a, b) {
+  const [x, y] = [a, b].map((v) => String(v).split(".").map(Number));
+  const i = [0, 1, 2].find((k) => x[k] !== y[k]);
+  return i !== void 0 && x[i] > y[i];
 }
 async function ensureSession(client, env, config, force) {
   if (client.session?.bearerToken && !force) return;
@@ -638,8 +705,9 @@ async function checkCars(client, env, config, done) {
 }
 function describe(car, fences) {
   const parts = [
-    `engine=${car.engine}`,
-    `locked=${car.locked ?? "?"}`,
+    `gear=${car.gear ?? "?"}`,
+    `speed=${car.speed ?? "?"}km/h`,
+    `usage=${car.usage ?? "?"}`,
     `battery=${car.battery ?? "?"}%`,
     `sentry=${car.sentry === null ? "?" : car.sentry ? "on" : "off"}`
   ];

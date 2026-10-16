@@ -2,7 +2,8 @@
 // (com.zeekr.global 1.5.5). The HMAC pair is the one the login gateway
 // gateway-pub-hw-em-sg.zeekrlife.com accepts (EM), confirmed with a Singapore account.
 // A secret or environment variable with the same name overrides a value here,
-// e.g. after a Zeekr app update changes them.
+// e.g. after a Zeekr app update changes them. A European account needs all six from the
+// European app (com.zeekr.overseas), set that way; the European gateway refuses these.
 export const APP_CONSTANTS = {
   HMAC_ACCESS_KEY: "edb79b1f68e0430ba192f856617bbcb7",
   HMAC_SECRET_KEY: "8ni9hp2v81ab165f5e744c808e5d48304b6df0e7",

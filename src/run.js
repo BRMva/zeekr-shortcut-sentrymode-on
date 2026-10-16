@@ -58,7 +58,29 @@ export async function run(env) {
     log(`${err.message}, logging in again`);
     await ensureSession(client, env, config, true);
     await checkCars(client, env, config, done);
+  } finally {
+    await announceUpdate();
   }
+}
+
+// Once a day, in the tick in the first five minutes after midnight UTC, the log says when the
+// public repository has a newer version (a fork upgrades with Sync fork). One small request;
+// nothing is stored; no news on failure.
+const LATEST = ABOUT.repo.replace("https://github.com/", "https://raw.githubusercontent.com/") + "/main/package.json";
+
+export async function announceUpdate(now = Date.now()) {
+  const t = new Date(now);
+  if (t.getUTCHours() !== 0 || t.getUTCMinutes() >= 5) return;
+  try {
+    const { version } = await (await fetch(LATEST, { signal: AbortSignal.timeout(10_000) })).json();
+    if (newer(version, ABOUT.version)) log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+  } catch {}
+}
+
+function newer(a, b) {
+  const [x, y] = [a, b].map((v) => String(v).split(".").map(Number));
+  const i = [0, 1, 2].find((k) => x[k] !== y[k]);
+  return i !== undefined && x[i] > y[i];
 }
 
 async function ensureSession(client, env, config, force) {
@@ -112,8 +134,9 @@ async function checkCars(client, env, config, done) {
 
 function describe(car, fences) {
   const parts = [
-    `engine=${car.engine}`,
-    `locked=${car.locked ?? "?"}`,
+    `gear=${car.gear ?? "?"}`,
+    `speed=${car.speed ?? "?"}km/h`,
+    `usage=${car.usage ?? "?"}`,
     `battery=${car.battery ?? "?"}%`,
     `sentry=${car.sentry === null ? "?" : car.sentry ? "on" : "off"}`,
   ];

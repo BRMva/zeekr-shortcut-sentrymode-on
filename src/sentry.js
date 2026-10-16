@@ -1,31 +1,44 @@
 // Sentry decision: one pure function from (car reading, remembered parking, config) to an action.
 //
-// A "parking" starts when the car is first seen parked, and ends when it is seen driving
-// or found more than NEW_PARKING_M from where the parking started. Within one parking:
+// A "parking" starts when the car is first seen parked (in P), and ends when it is seen in another
+// gear or found more than NEW_PARKING_M from where the parking started. Within one parking:
 //   - inside a geofence            -> leave sentry alone
 //   - sentry seen on at any point  -> done; if it later goes off (owner or car turned it off), respect that
 //   - otherwise                    -> turn it on, up to MAX_ATTEMPTS times, once the preconditions hold
 
 export const NEW_PARKING_M = 300;
-export const MAX_ATTEMPTS = 3;
+export const MAX_ATTEMPTS = 6;
 export const MIN_BATTERY = 20; // %
+
+// Usage modes in which the car is switched on and in use, and does not take the remote sentry
+// command: 4 ready to drive, 13 active (seen with someone in the car in P). Names from the Home
+// Assistant integration; any other mode (0 asleep, 1 parked, 2 unlocked, ...) gets the command.
+const IN_USE = new Set(["4", "13"]);
 
 const num = (v) => (v === undefined || v === null || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
 
-// Field meanings follow the Home Assistant integration (sensor.py, lock.py, switch.py).
+// Field meanings follow the Home Assistant integration (sensor.py, switch.py); the gear is the
+// automatic gear position in drivingBehaviourStatus, 0 being P (as a parked car reports it).
+// Parked means in P: the gear follows the car at once, and a car in P cannot move. The speed is
+// shown only, as a parked car now and then reports one (7 km/h while charging at home). The engine
+// status is not used: it lags behind the car by minutes ("engine-off" well into a drive). The
+// usage mode is the car's power state (see IN_USE).
 export function readCar(status, remoteState) {
   const basic = status.basicVehicleStatus ?? {};
   const extra = status.additionalVehicleStatus ?? {};
   const lat = num(basic.position?.latitude);
   const lon = num(basic.position?.longitude);
-  const lock = extra.drivingSafetyStatus?.centralLockingStatus;
   const sentry = remoteState?.vstdModeState;
-  const engine = String(basic.engineStatus ?? "").toLowerCase();
+  const gear = num(extra.drivingBehaviourStatus?.gearAutoStatus);
+  const speed = num(basic.speed);
+  const usage = basic.usageMode;
   return {
-    engine: engine || "unknown",
-    parked: engine === "engine-off" || engine === "charging",
+    gear: gear === null ? null : gear === 0 ? "P" : String(gear),
+    speed,
+    usage: usage === undefined || usage === null || usage === "" ? null : String(usage),
+    // Why the car counts as driving, or null when it is parked.
+    driving: gear === null ? "gear unknown" : gear === 0 ? null : `gear ${gear}`,
     position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
-    locked: lock === undefined || lock === null ? null : String(lock) === "1",
     battery: num(extra.electricVehicleStatus?.chargeLevel),
     sentry: sentry === undefined || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase()),
   };
@@ -81,7 +94,7 @@ export function parseGeofences(text) {
 
 // Returns { parking, action: "enable" | "none", reason }. `parking` is what to remember (null when driving).
 export function decide(car, parking, { fences }, now = Date.now()) {
-  if (!car.parked) return { parking: null, action: "none", reason: `not parked (${car.engine})` };
+  if (car.driving) return { parking: null, action: "none", reason: `not parked (${car.driving})` };
 
   const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
   const p = !parking || moved ? { since: now, position: car.position, attempts: 0, seenOn: false } : { ...parking };
@@ -99,10 +112,10 @@ export function decide(car, parking, { fences }, now = Date.now()) {
     const fence = insideFence(car.position, fences);
     if (fence) return { parking: p, action: "none", reason: `inside geofence "${fence.name}"` };
   }
-  if (car.locked === false) return { parking: p, action: "none", reason: "not locked yet" };
   if (car.battery !== null && car.battery < MIN_BATTERY) {
     return { parking: p, action: "none", reason: `battery ${car.battery}% below ${MIN_BATTERY}%` };
   }
+  if (IN_USE.has(car.usage)) return { parking: p, action: "none", reason: `car in use (usage ${car.usage})` };
   if (p.attempts >= MAX_ATTEMPTS) return { parking: p, action: "none", reason: `gave up after ${MAX_ATTEMPTS} attempts` };
 
   p.attempts += 1;

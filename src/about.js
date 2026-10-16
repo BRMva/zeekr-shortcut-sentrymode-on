@@ -3,7 +3,7 @@
 // match package.json (a test checks it); bump both for every change that ships.
 export const ABOUT = {
   name: "zeekr-sentry",
-  version: "0.3.2",
+  version: "0.4.2",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
@@ -11,6 +11,7 @@ export const ABOUT = {
     "Fryyyyy/zeekr_ev_api (MIT): Zeekr API, login and request signing",
     "Fryyyyy/zeekr_homeassistant (MIT): sentry command and status fields",
     "wysie/zeekr_key_extractor (MIT): app constants from the public Zeekr app",
+    "borconi/openzeekr (MIT): the European servers",
   ],
 };
 

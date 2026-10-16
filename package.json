@@ -1,6 +1,6 @@
 {
   "name": "zeekr-shortcut-sentrymode-on",
-  "version": "0.3.2",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "description": "Turns on Zeekr sentry mode when the car is parked outside your geofences (Cloudflare Workers)",
@@ -22,22 +22,6 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "cloudflare": {
-    "bindings": {
-      "ZEEKR_EMAIL": {
-        "description": "Email of a second Zeekr account that your car is shared with. Not the account in your phone's Zeekr app, or the app gets signed out."
-      },
-      "ZEEKR_PASSWORD": {
-        "description": "Password of that second account."
-      },
-      "GEOFENCES": {
-        "description": "Places where sentry mode is never turned on, up to 10, separated by semicolons. Each: name, latitude, longitude, radius in metres (default 600). Example: Home, 1.3521, 103.8198, 600"
-      },
-      "STATE": {
-        "description": "Storage for the sign-in session and the current parking. Keep new."
-      }
-    }
   },
   "devDependencies": {
     "esbuild": "0.28.2",
