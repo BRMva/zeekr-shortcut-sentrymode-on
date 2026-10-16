@@ -7,6 +7,19 @@ sentry mode on for you within a few minutes.
 - **Nothing to keep running:** it runs on Cloudflare's servers, so your computer and phone can be off.
 - **No code:** you set it up in your browser by clicking and filling in a form. It takes about 15 minutes.
 
+**How it works**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.svg">
+  <img alt="The program runs in your own Cloudflare account, keeps your settings there encrypted, and talks to Zeekr's servers over an encrypted connection; the servers pass the sentry command to your car." src="docs/images/overview-light.svg">
+</picture>
+
+The program runs in **your own** Cloudflare account. Your second Zeekr account's email and password, and your places,
+are stored there encrypted. Every 5 minutes it signs in to Zeekr's servers over an encrypted (HTTPS) connection, the
+same way the Zeekr app does, reads where the car is, whether it is locked and its battery level, and asks for sentry
+mode when needed; Zeekr's servers pass that on to the car. There is no server of the author's in between, and nobody
+else can see your settings.
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/dts88/zeekr-shortcut-sentrymode-on)
 
 > This is an unofficial, personal project, not affiliated with Zeekr. It works through the same service the Zeekr app
@@ -49,10 +62,20 @@ The program has to sign in to a Zeekr account to check the car and turn sentry m
 one in your phone's Zeekr app:** when an account signs in somewhere else, the app is signed out.
 
 1. Register a new Zeekr account with a different email address.
-2. In the Zeekr app, signed in with your main account, share your car with the new account.
-   <!-- To add: menu path and screenshots for sharing the car; can remote-control permission be chosen; does the second account have to accept -->
-3. Sign in to the Zeekr app once with the second account, check that you can see the car and its sentry mode switch,
-   then sign out. Don't use the second account in the app after that.
+2. In the Zeekr app, signed in with your **main** account, open **Vehicle & Security** → **Share Vehicle** (1) →
+   **Create Sharing** (2), and share the car with the second account's email address, for an unlimited time.
+   <!-- To confirm: where Vehicle & Security is opened from; the fields of the Create Sharing form -->
+3. Sign in to the Zeekr app with the **second** account and accept the shared car. Back in the main account, the
+   sharing list now shows **Accepted**, **Started** and **Unlimited time** (3).
+   <!-- To confirm: how the second account accepts the invitation -->
+4. While signed in with the second account, check that you can see the car and its sentry mode switch, then sign out.
+   Don't use the second account in the app after that.
+
+<p>
+  <img alt="Vehicle &amp; Security, then Share Vehicle" src="docs/images/zeekr-app-vehicle-security.jpg" width="300">
+  &nbsp;
+  <img alt="Share Vehicle: Create Sharing; the sharing list shows Accepted, Started, Unlimited time" src="docs/images/zeekr-app-share-vehicle.jpg" width="300">
+</p>
 
 ### 2. The places where sentry mode should not turn on (up to 10)
 
