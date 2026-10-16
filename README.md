@@ -64,10 +64,8 @@ one in your phone's Zeekr app:** when an account signs in somewhere else, the ap
 1. Register a new Zeekr account with a different email address.
 2. In the Zeekr app, signed in with your **main** account, open **Vehicle & Security** → **Share Vehicle** (1) →
    **Create Sharing** (2), and share the car with the second account's email address, for an unlimited time.
-   <!-- To confirm: where Vehicle & Security is opened from; the fields of the Create Sharing form -->
 3. Sign in to the Zeekr app with the **second** account and accept the shared car. Back in the main account, the
    sharing list now shows **Accepted**, **Started** and **Unlimited time** (3).
-   <!-- To confirm: how the second account accepts the invitation -->
 4. While signed in with the second account, check that you can see the car and its sentry mode switch, then sign out.
    Don't use the second account in the app after that.
 
