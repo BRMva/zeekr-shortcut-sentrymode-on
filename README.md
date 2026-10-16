@@ -11,7 +11,7 @@ sentry mode on for you within a few minutes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.svg">
-  <img alt="The program runs in your own Cloudflare account, keeps your settings there encrypted, and talks to Zeekr's servers over an encrypted connection; the servers pass the sentry command to your car." src="docs/images/overview-light.svg">
+  <img alt="A Worker in your Cloudflare environment keeps the second (shared) Zeekr account encrypted and talks to Zeekr's servers over an encrypted connection; the servers pass the sentry command to your car." src="docs/images/overview-light.svg">
 </picture>
 
 The program runs in **your own** Cloudflare account. Your second Zeekr account's email and password, and your places,

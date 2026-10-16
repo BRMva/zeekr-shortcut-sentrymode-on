@@ -1,29 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 364" width="1040" height="364" role="img" aria-label="The program runs in your own Cloudflare account, keeps your settings there encrypted, and talks to Zeekr's servers over an encrypted connection, which pass the sentry command to your car." font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 320" width="1040" height="320" role="img" aria-label="A Worker in your Cloudflare environment keeps the second Zeekr account encrypted and talks to Zeekr's servers over an encrypted connection; the servers pass the sentry command to your car." font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
 <defs>
 <marker id="arrow-line" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6e7781"/></marker>
 <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/></marker>
 </defs>
 <g transform="translate(0,-28)">
-<rect x="16" y="44" width="452" height="332" rx="18" fill="#f6f8fa" stroke="#f38020" stroke-width="2"/>
-<text x="40" y="78" font-size="17" font-weight="700" fill="#b4530f">Your Cloudflare account<tspan font-weight="400" fill="#59636e" font-size="14">  ·  free plan</tspan></text>
+<rect x="16" y="44" width="452" height="288" rx="18" fill="#f6f8fa" stroke="#f38020" stroke-width="2"/>
+<text x="40" y="78" font-size="17" font-weight="700" fill="#b4530f">Cloudflare environment</text>
 <rect x="40" y="96" width="404" height="92" rx="12" fill="#fff4ea" stroke="#f38020" stroke-width="1.5"/>
-<text x="62" y="134" font-size="18" font-weight="700" fill="#1f2328">zeekr-sentry</text>
+<text x="62" y="134" font-size="18" fill="#1f2328">Worker: <tspan font-weight="700">zeekr-sentry</tspan></text>
 <text x="62" y="160" font-size="13.5" fill="#59636e">this program · wakes up every 5 minutes</text>
 <circle cx="412" cy="142" r="15" fill="none" stroke="#59636e" stroke-width="2"/><path d="M412,133 V142 L419,146" fill="none" stroke="#59636e" stroke-width="2" stroke-linecap="round"/>
-<rect x="40" y="232" width="196" height="120" rx="12" fill="#e6f6ea" stroke="#1a7f37" stroke-width="1.5"/>
+<rect x="40" y="232" width="404" height="80" rx="12" fill="#e6f6ea" stroke="#1a7f37" stroke-width="1.5"/>
 <path d="M63.0,259 v-3.5 a4.0,4.0 0 0 1 8.0,0 v3.5" fill="none" stroke="#1a7f37" stroke-width="1.8"/><rect x="60" y="259" width="14.0" height="11.0" rx="2.0" fill="#1a7f37"/>
 <text x="84" y="270" font-size="14.5" font-weight="700" fill="#1f2328">Encrypted settings</text>
-<text x="60" y="298" font-size="13" fill="#59636e">second account's email</text>
-<text x="60" y="317" font-size="13" fill="#59636e">and password</text>
-<text x="60" y="336" font-size="13" fill="#59636e">your places</text>
-<rect x="248" y="232" width="196" height="120" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<text x="268" y="270" font-size="14.5" font-weight="700" fill="#1f2328">Storage</text>
-<text x="268" y="298" font-size="13" fill="#59636e">sign-in session</text>
-<text x="268" y="317" font-size="13" fill="#59636e">current parking</text>
-<line x1="138" y1="230" x2="138" y2="193" stroke="#6e7781" stroke-width="2" marker-end="url(#arrow-line)"/>
-<text x="148" y="216" font-size="12.5" fill="#59636e">read at each run</text>
-<line x1="346" y1="230" x2="346" y2="193" stroke="#6e7781" stroke-width="2" marker-start="url(#arrow-line)" marker-end="url(#arrow-line)"/>
-<text x="356" y="216" font-size="12.5" fill="#59636e">keeps</text>
+<text x="60" y="296" font-size="13.5" fill="#59636e">Second Zeekr account / shared account</text>
+<line x1="242" y1="230" x2="242" y2="193" stroke="#6e7781" stroke-width="2" marker-end="url(#arrow-line)"/>
+<text x="252" y="216" font-size="12.5" fill="#59636e">read at each run</text>
 <line x1="447" y1="142" x2="636" y2="142" stroke="#1a7f37" stroke-width="3" marker-start="url(#arrow-accent)" marker-end="url(#arrow-accent)"/>
 <path d="M481.55,115 v-2.975 a3.4,3.4 0 0 1 6.8,0 v2.975" fill="none" stroke="#1a7f37" stroke-width="1.53"/><rect x="479" y="115" width="11.9" height="9.35" rx="1.7" fill="#1a7f37"/>
 <text x="498" y="124" font-size="13" font-weight="700" fill="#1a7f37">HTTPS · encrypted</text>
@@ -46,12 +38,12 @@
 <circle cx="897" cy="151" r="6" fill="#ffffff" stroke="#1f2328" stroke-width="2"/>
 <circle cx="940" cy="151" r="6" fill="#ffffff" stroke="#1f2328" stroke-width="2"/>
 <text x="913" y="178" font-size="15" font-weight="700" text-anchor="middle" fill="#1f2328">Your car</text>
-<rect x="600" y="258" width="176" height="94" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
-<rect x="620" y="280" width="16" height="27" rx="3" fill="none" stroke="#59636e" stroke-width="1.8"/>
-<text x="646" y="293" font-size="15" font-weight="700" fill="#1f2328">Zeekr app</text>
-<text x="646" y="314" font-size="12.5" fill="#59636e">your main account</text>
-<line x1="688" y1="256" x2="688" y2="193" stroke="#6e7781" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-line)"/>
-<text x="698" y="222" font-size="12.5" fill="#59636e">shares the car with the</text>
-<text x="698" y="239" font-size="12.5" fill="#59636e">second account, once</text>
+<rect x="600" y="248" width="176" height="84" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+<rect x="620" y="268" width="16" height="27" rx="3" fill="none" stroke="#59636e" stroke-width="1.8"/>
+<text x="646" y="282" font-size="15" font-weight="700" fill="#1f2328">Zeekr app</text>
+<text x="646" y="303" font-size="12.5" fill="#59636e">your main account</text>
+<line x1="688" y1="246" x2="688" y2="193" stroke="#6e7781" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-line)"/>
+<text x="698" y="214" font-size="12.5" fill="#59636e">shares the car with the</text>
+<text x="698" y="231" font-size="12.5" fill="#59636e">second account, once</text>
 </g></g>
 </svg>
