@@ -3,7 +3,7 @@
 // match package.json (a test checks it); bump both for every change that ships.
 export const ABOUT = {
   name: "zeekr-sentry",
-  version: "0.4.2",
+  version: "0.4.4",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
@@ -20,7 +20,7 @@ export const TAG = `[v${ABOUT.version}]`;
 export function aboutText() {
   return [
     `${ABOUT.name} ${ABOUT.version}`,
-    "Turns Zeekr sentry mode on when the car is parked and locked away from your geofences.",
+    "Turns Zeekr sentry mode on when the car is parked away from your geofences.",
     `Source: ${ABOUT.repo} (${ABOUT.license}) by ${ABOUT.author}`,
     "Based on:",
     ...ABOUT.credits.map((c) => `  ${c}`),

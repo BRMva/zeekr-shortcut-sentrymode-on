@@ -1,7 +1,8 @@
 // Sentry decision: one pure function from (car reading, remembered parking, config) to an action.
 //
 // A "parking" starts when the car is first seen parked (in P), and ends when it is seen in another
-// gear or found more than NEW_PARKING_M from where the parking started. Within one parking:
+// gear or found more than NEW_PARKING_M from where the parking started; a reading without a gear
+// changes nothing. Within one parking:
 //   - inside a geofence            -> leave sentry alone
 //   - sentry seen on at any point  -> done; if it later goes off (owner or car turned it off), respect that
 //   - otherwise                    -> turn it on, up to MAX_ATTEMPTS times, once the preconditions hold
@@ -36,8 +37,6 @@ export function readCar(status, remoteState) {
     gear: gear === null ? null : gear === 0 ? "P" : String(gear),
     speed,
     usage: usage === undefined || usage === null || usage === "" ? null : String(usage),
-    // Why the car counts as driving, or null when it is parked.
-    driving: gear === null ? "gear unknown" : gear === 0 ? null : `gear ${gear}`,
     position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
     battery: num(extra.electricVehicleStatus?.chargeLevel),
     sentry: sentry === undefined || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase()),
@@ -75,6 +74,8 @@ export function parseGeofences(text) {
     .split(/[\n;]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // Only separators must not mean "no geofences" (and sentry turned on at home).
+  if (!places.length && text.trim()) throw new Error(`GEOFENCES has no places; write none for no geofences`);
   if (places.length > MAX_FENCES) throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
   return places.map((place, i) => {
     const parts = place.split(",").map((s) => s.trim());
@@ -87,17 +88,23 @@ export function parseGeofences(text) {
       Math.abs(lat) <= 90 &&
       Math.abs(lon) <= 180 &&
       radius > 0;
-    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600", got "${place}"`);
+    // The place itself is not repeated: this message is also shown on the Worker's own URL.
+    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600"`);
     return { name, lat, lon, radius_m: radius };
   });
 }
 
 // Returns { parking, action: "enable" | "none", reason }. `parking` is what to remember (null when driving).
-export function decide(car, parking, { fences }, now = Date.now()) {
-  if (car.driving) return { parking: null, action: "none", reason: `not parked (${car.driving})` };
+export function decide(car, parking, { fences }) {
+  if (car.gear === null) {
+    // Still note sentry seen on, so the owner's later "off" is respected.
+    const seen = parking && car.sentry === true && !parking.seenOn ? { ...parking, seenOn: true } : parking;
+    return { parking: seen, action: "none", reason: "gear unknown" };
+  }
+  if (car.gear !== "P") return { parking: null, action: "none", reason: `not parked (gear ${car.gear})` };
 
   const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
-  const p = !parking || moved ? { since: now, position: car.position, attempts: 0, seenOn: false } : { ...parking };
+  const p = !parking || moved ? { position: car.position, attempts: 0, seenOn: false } : { ...parking };
   if (!p.position && car.position) p.position = car.position;
 
   if (car.sentry === true) {

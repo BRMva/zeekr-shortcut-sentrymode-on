@@ -28,7 +28,7 @@ const FAMILIES = [
     // One set of servers for every country, in the shape of a region-list entry.
     servers: {
       regionCode: "EU",
-      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/`, messageCoreUrl: `${EU_GATEWAY}eu-message-core/` },
+      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/` },
     },
   },
 ];
@@ -127,13 +127,13 @@ export class ZeekrClient {
     return readJson(resp);
   }
 
-  async app(method, path, { query = "", body, vin, auth = this.session?.bearerToken ?? "" } = {}) {
+  async app(method, path, { query = "", body, vin } = {}) {
     const ss = this.session;
     const url = `${ss.loginServer}${path}${query}`;
     const headers = {
       "ACCEPT-LANGUAGE": "en-AU",
       AppId: "ONEX97FB91F061405",
-      authorization: auth,
+      authorization: ss.bearerToken ?? "",
       "Content-Type": "application/json; charset=UTF-8",
       "user-agent": "okhttp/4.12.0",
       "X-API-SIGNATURE-VERSION": "2.0",
@@ -159,8 +159,9 @@ export class ZeekrClient {
   // ---- login (same calls and order as the Python client) ----
   // The country is not a setting: the user directory reports the account's registered country.
 
+  // The session keeps the email it was made for, so a changed ZEEKR_EMAIL means a new login.
   async login() {
-    const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID() };
+    const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID(), email: this.s.email };
     this.authToken = null;
 
     // Each family in turn: its region list (a gateway refusing the keys answers 0001 "Invalid access
@@ -191,13 +192,12 @@ export class ZeekrClient {
     const block = this.family.servers ?? (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
     ss.appServer = block?.url?.appServerUrl ?? "";
     ss.userCenter = block?.url?.userCenterUrl ?? "";
-    ss.messageCore = block?.url?.messageCoreUrl ?? "";
     ss.region = block?.regionCode ?? "";
     ss.loginServer = LOGIN_SERVERS[ss.region];
-    if (!ss.appServer || !ss.userCenter || !ss.messageCore || !ss.loginServer) {
+    if (!ss.appServer || !ss.userCenter || !ss.loginServer) {
       throw new ZeekrError(`accounts registered in ${ss.country} are not supported (region ${ss.region || "unknown"})`);
     }
-    for (const k of ["appServer", "userCenter", "messageCore"]) if (!ss[k].endsWith("/")) ss[k] += "/";
+    for (const k of ["appServer", "userCenter"]) if (!ss[k].endsWith("/")) ss[k] += "/";
     ss.projectId = PROJECT_IDS[ss.region] ?? "ZEEKR_SEA";
 
     if (ss.userCenter !== this.family.userCenter) {
@@ -214,8 +214,8 @@ export class ZeekrClient {
     if (!login.success || login.data?.tokenName !== "Authorization" || !login.data?.tokenValue) {
       throw new ZeekrError(`login failed ${brief(login)}`);
     }
+    // Kept in memory for this login only: the stored session holds just the bearer token.
     this.authToken = login.data.tokenValue;
-    ss.authToken = this.authToken;
 
     await this.gateway("POST", `${ss.userCenter}user/info`);
     await this.gateway("POST", `${ss.appServer}protocol/service/getProtocol`, { country: ss.country });
@@ -226,7 +226,6 @@ export class ZeekrClient {
 
     this.session = ss;
     const bearer = await this.app("POST", "ms-user-auth/v1.0/auth/login", {
-      auth: "",
       body: {
         identifier: tsp.data.code,
         identityType: 10,
@@ -263,13 +262,12 @@ export class ZeekrClient {
     return r.data ?? {};
   }
 
-  // Same command the Home Assistant integration sends for its Sentry Mode switch.
-  async setSentry(vin, on) {
+  // Same command the Home Assistant integration sends to switch Sentry Mode on.
+  async startSentry(vin) {
     const r = await this.app("POST", "ms-remote-control/v1.0/remoteControl/control", {
       vin,
-      body: { command: on ? "start" : "stop", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } },
+      body: { command: "start", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } },
     });
     if (!r.success) throw new ZeekrError(`sentry command rejected ${brief(r)}`);
-    return r;
   }
 }

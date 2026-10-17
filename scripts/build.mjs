@@ -14,7 +14,7 @@ export const DIST = join(root, "dist", "zeekr-sentry.js");
 export async function bundle() {
   const banner = [
     `// ${ABOUT.name} ${ABOUT.version} — ${ABOUT.repo} (${ABOUT.license}) by ${ABOUT.author}`,
-    "// Turns Zeekr sentry mode on when the car is parked and locked away from your places.",
+    "// Turns Zeekr sentry mode on when the car is parked away from your places.",
     "// Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code",
     "// editor. Step by step: docs/setup-manual.md in the repository above.",
     "// Based on:",

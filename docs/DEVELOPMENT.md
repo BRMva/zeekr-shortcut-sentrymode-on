@@ -2,13 +2,9 @@
 
 ## Layout
 
-One core, two entry points:
-
 - `src/run.js` — one tick: log in if needed, read each car, decide (`src/sentry.js`), send the sentry command.
 - `src/index.js` — Cloudflare Worker: cron trigger → `run()`, state in the `STATE` KV namespace; its URL (when it has
   one) shows the version, credits and which settings are missing.
-- `scripts/run.mjs` — Node: one tick on your PC (`npm run check`), or by hand on GitHub Actions
-  (`.github/workflows/sentry.yml`, maintainer's test tool, no schedule). State in an encrypted file.
 
 `src/zeekr.js` and `src/crypto.js` are a port of [Fryyyyy/zeekr_ev_api](https://github.com/Fryyyyy/zeekr_ev_api);
 `test/vectors.json` (generated with zeekr_ev_api 0.1.15 and dummy keys) checks the signatures byte for byte.
@@ -28,8 +24,12 @@ changing `src/` (`npm run build`); `npm test` fails while it is stale.
 | `DRY_RUN` | optional, `true` = log the decision, never send the command |
 | `HMAC_ACCESS_KEY`, `HMAC_SECRET_KEY`, `PASSWORD_PUBLIC_KEY`, `PROD_SECRET`, `VIN_KEY`, `VIN_IV` | optional, override the app constants in `src/app-constants.js` (EM). A European account needs all six from the European app |
 
-After the first deploy of an imported fork, the user adds the three settings of `.dev.vars.example` as secrets in
-the Worker's settings (see README).
+After the first deploy of an imported fork, the user adds the three settings of `.dev.vars.example` in the Worker's
+settings (see README): `ZEEKR_PASSWORD` as a secret, `ZEEKR_EMAIL` and `GEOFENCES` as text variables, visible and
+editable in the dashboard (`keep_vars` keeps them across deploys). The Worker gets a secret and a text
+variable alike, as a string, so nothing in the code can insist on a secret, and `secrets.required` in
+`wrangler.jsonc` would fail the very first deploy of a new fork (wrangler: "This Worker does not exist yet").
+Setting values never reach the log or the Worker's URL page: errors name the setting or the place's number only.
 
 ## Regions
 
@@ -47,11 +47,12 @@ the European path follows zeekr_ev_api and openzeekr, whose author verified it o
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars    # fill in the settings
-npm run check                     # one dry run from your PC
 npm run build                     # regenerate dist/zeekr-sentry.js
-npm test
+npm test                          # against a fake Zeekr API
 ```
+
+The program runs only as the Worker. A run anywhere else (`wrangler dev`, a script on your PC) logs in with the
+same account and signs the Worker out, so real-car checks happen on the deployed Worker and its logs.
 
 ## Versions and releases
 

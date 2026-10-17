@@ -16,10 +16,10 @@ on for you within a few minutes.
 </picture>
 
 The program runs in **your own** Cloudflare account. Your second Zeekr account's email and password, and your places,
-are stored there encrypted. Every 5 minutes it signs in to Zeekr's servers over an encrypted (HTTPS) connection, the
-same way the Zeekr app does, reads where the car is, its gear, speed and battery level, and asks for sentry mode when
-needed; Zeekr's servers pass that on to the car. There is no server of the author's in between, and nobody
-else can see your settings.
+are stored there (the password always encrypted). Every 5 minutes it signs in to Zeekr's servers over an encrypted
+(HTTPS) connection, the same way the Zeekr app does, reads where the car is, its gear, speed and battery level, and
+asks for sentry mode when needed; Zeekr's servers pass that on to the car. There is no server of the author's in
+between, and nobody else can see your settings.
 
 > This is an unofficial, personal project, not affiliated with Zeekr. It works through the same service the Zeekr app
 > uses, so it may stop working for a while if Zeekr changes that service.
@@ -176,14 +176,14 @@ The program now runs, but until you add your settings in the next step, its log 
 
    ![Settings, then Add variable](docs/images/settings-add-variable.jpg)
 
-2. Fill in the first row (1): the name in **Key**, the value in **Value**, and tick **Secret**. Click **+ Add** (2)
-   for the next row, until you have all three:
+2. Fill in the first row (1): the name in **Key**, the value in **Value**, and tick **Secret** where the table says
+   so. Click **+ Add** (2) for the next row, until you have all three:
 
-   | Key | Value |
-   |---|---|
-   | `ZEEKR_EMAIL` | the second Zeekr account's email address |
-   | `ZEEKR_PASSWORD` | that account's password |
-   | `GEOFENCES` | your places, for example `Home, 1.3521, 103.8198, 600` |
+   | Key | Value | Secret |
+   |---|---|---|
+   | `ZEEKR_EMAIL` | the second Zeekr account's email address | don't tick |
+   | `ZEEKR_PASSWORD` | that account's password | **always tick it** |
+   | `GEOFENCES` | your places, for example `Home, 1.3521, 103.8198, 600` | don't tick |
 
 3. Click **Add variable and deploy** (3).
 
@@ -209,12 +209,12 @@ viewed again, not even by you; you can still replace it (see
 
    ![The Observability tab: the program's lines start with the version](docs/images/logs.jpg)
 
-A new schedule can take up to 15 minutes to start. The first run looks like this (`[v0.4.2]` is the program's version):
+A new schedule can take up to 15 minutes to start. The first run looks like this (`[v0.4.4]` is the program's version):
 
 ```
-[v0.4.2] logging in · zeekr-sentry 0.4.2 · https://github.com/dts88/zeekr-shortcut-sentrymode-on · based on Fryyyyy/zeekr_ev_api (MIT)
-[v0.4.2] logged in (SG account, region SEA), 1 car(s)
-[v0.4.2] car …123456 gear=P speed=0km/h usage=1 battery=80% sentry=off 120 m from "Home" -> none: inside geofence "Home"
+[v0.4.4] logging in · zeekr-sentry 0.4.4 · https://github.com/dts88/zeekr-shortcut-sentrymode-on · based on Fryyyyy/zeekr_ev_api (MIT)
+[v0.4.4] logged in (SG account, region SEA), 1 car(s)
+[v0.4.4] car …123456 gear=P speed=0km/h usage=1 battery=80% sentry=off 120 m from "Home" -> none: inside geofence "Home"
 ```
 
 The last line is the result of each check:
@@ -236,8 +236,8 @@ Park somewhere outside your places and put the car in P. Within 10 minutes, open
 on. The log shows:
 
 ```
-[v0.4.2] car …123456 gear=P speed=0km/h usage=1 battery=80% sentry=off 2400 m from "Home" -> enable: attempt 1/6
-[v0.4.2] car …123456 sentry start sent
+[v0.4.4] car …123456 gear=P speed=0km/h usage=1 battery=80% sentry=off 2400 m from "Home" -> enable: attempt 1/6
+[v0.4.4] car …123456 sentry start sent
 ```
 
 ---
@@ -255,8 +255,10 @@ Cloudflare dashboard → **Compute** → **Workers & Pages** → `zeekr-shortcut
 
    ![Settings, then the pencil next to the setting](docs/images/settings-secrets.jpg)
 
-3. Saved secrets cannot be viewed again: click **Rotate**, type the whole new value (not just the part you are
-   changing), then click **Deploy**. (**Save version** alone does not put the change into use.)
+3. A secret (the password, and any other setting you ticked **Secret** for) cannot be viewed again: click
+   **Rotate**, type the whole new value (not just the part you are changing), then click **Deploy**. A setting
+   without **Secret** shows its value: change it in place, then click **Deploy**. (**Save version** alone does not
+   put the change into use.)
 
    ![Rotate, type the new value, Deploy](docs/images/secret-rotate.jpg)
 
@@ -311,9 +313,14 @@ No. Cloudflare's free plan allows 100,000 requests a day; this program runs abou
 
 ### The deployment failed
 
-Usually it is the name: the Cloudflare project must be called `zeekr-shortcut-sentrymode-on`. Delete the Worker (see
-[Uninstall](#uninstall), step 1), then do [Step 2](#step-2-connect-cloudflare-to-your-fork) and
-[Step 3](#step-3-deploy) again, keeping that name.
+The build log on that page says why. The usual causes:
+
+- **The name:** the Cloudflare project must be called `zeekr-shortcut-sentrymode-on`.
+- **A storage space left over from an earlier install:** the log says a namespace with the title
+  `zeekr-shortcut-sentrymode-on-state` already exists. Delete it under **Storage & databases** → **Workers KV**.
+
+Then delete the Worker (see [Uninstall](#uninstall), step 1) and do [Step 2](#step-2-connect-cloudflare-to-your-fork)
+and [Step 3](#step-3-deploy) again.
 
 ### My phone's Zeekr app keeps getting signed out
 
@@ -336,7 +343,7 @@ Look at the reason after `-> none:` in the log:
 | `sentry turned off during this parking, respecting it` | sentry mode was on during this parking and was turned off, so it stays off |
 | `gave up after 6 attempts` | 6 tries during this parking (one every 5 minutes) did not turn it on; the count starts again at the next parking |
 | `not parked (gear 3)` | the car is not in P (3 is the number the car reports for its gear) |
-| `not parked (gear unknown)` | Zeekr did not report the car's gear |
+| `gear unknown` | Zeekr did not report the car's gear; the parking is kept as it was |
 | `car in use (usage 13)` | the car is parked but still switched on (someone is in it); it tries once the car is switched off |
 
 ### Other log messages
@@ -348,6 +355,8 @@ Look at the reason after `-> none:` in the log:
 | `token expired, logging in again` | the sign-in expired and the program signs in again. Occasional ones are normal |
 | `missing: …` | a setting is missing; add it as in [Step 4](#step-4-add-your-three-settings) |
 | `geofence 2 should look like …` | the 2nd place is not written correctly |
+| `sentry start failed: …` | Zeekr refused the command or did not answer in time; it counts as one of the 6 tries |
+| `0 car(s)` | the second account has no car: share the car with it and accept the share; the program asks again every 5 minutes |
 | `no Zeekr account with this email …` | the email is wrong. `… a European account needs the keys of the European Zeekr app`: see [European accounts](#european-accounts) |
 | `Zeekr does not accept the app keys …` | the keys you added (see [European accounts](#european-accounts)) are wrong or out of date |
 | `login needed but held back …` | the program signed in less than 30 minutes ago and waits before signing in again, so the account is not locked. If it keeps appearing, check the password |
@@ -375,12 +384,16 @@ Share both with the second account; the program checks each one.
 
 ## Privacy and security
 
-- **Your Zeekr email and password** are stored as encrypted secrets in **your own** Cloudflare account. Nobody else,
-  including the author, can see them.
+- **Your Zeekr password** is stored as an encrypted secret in **your own** Cloudflare account; the email and your
+  places are visible only to you, on the Worker's Settings page. Nobody else, including the author, can see them.
+- **What the storage space holds:** a live Zeekr sign-in, which can find and control the car. Anyone who can change
+  Workers in your Cloudflare account, or the code in your fork, could also get the password. Keep both accounts to
+  yourself, with two-factor sign-in turned on. **Sync fork** brings in whatever this repository contains; **Compare**
+  there shows the changes first.
 - **Your fork on GitHub** is public, like this page, and contains only the program, none of your settings.
 - **Cloudflare's access to GitHub** covers only the repositories you chose in Step 2: your fork.
-- **The log** shows how far the car is from your places, its battery level and so on. Keep that in mind before
-  sharing screenshots of it.
+- **The log** shows how far the car is from your places (by name), its battery level and so on, but never the email,
+  the password or the coordinates. Keep that in mind before sharing screenshots of it.
 - Give the second Zeekr account a password you don't use anywhere else.
 
 ---

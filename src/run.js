@@ -1,6 +1,5 @@
-// One tick, shared by every platform: read each car and turn sentry mode on when it is
-// parked outside all geofences. `env` carries the secrets, the settings and a KV-like
-// STATE store (Cloudflare KV, or an encrypted file when run by Node).
+// One tick: read each car and turn sentry mode on when it is parked outside all geofences.
+// `env` carries the settings and the STATE KV namespace.
 
 import { ABOUT, TAG } from "./about.js";
 import { APP_CONSTANTS } from "./app-constants.js";
@@ -25,9 +24,6 @@ const SECRETS = {
   vinIv: "VIN_IV",
 };
 
-// Every name run() reads from env, apart from STATE.
-export const ENV_NAMES = [...Object.values(SECRETS), "GEOFENCES", "DRY_RUN"];
-
 const NO_STORAGE = "no storage: bind a KV namespace named STATE (Worker → Settings → Bindings)";
 
 // What stops a tick before it starts, in the same words the tick would fail with.
@@ -51,12 +47,12 @@ export async function run(env) {
   const client = new ZeekrClient(secrets, await env.STATE.get("session", { type: "json" }));
   const done = new Set();
   try {
-    await ensureSession(client, env, config, false);
+    await ensureSession(client, env, false);
     await checkCars(client, env, config, done);
   } catch (err) {
     if (!(err instanceof SessionLost)) throw err;
     log(`${err.message}, logging in again`);
-    await ensureSession(client, env, config, true);
+    await ensureSession(client, env, true);
     await checkCars(client, env, config, done);
   } finally {
     await announceUpdate();
@@ -73,7 +69,9 @@ export async function announceUpdate(now = Date.now()) {
   if (t.getUTCHours() !== 0 || t.getUTCMinutes() >= 5) return;
   try {
     const { version } = await (await fetch(LATEST, { signal: AbortSignal.timeout(10_000) })).json();
-    if (newer(version, ABOUT.version)) log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+    if (/^\d+\.\d+\.\d+$/.test(version) && newer(version, ABOUT.version)) {
+      log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+    }
   } catch {}
 }
 
@@ -83,17 +81,32 @@ function newer(a, b) {
   return i !== undefined && x[i] > y[i];
 }
 
-async function ensureSession(client, env, config, force) {
-  if (client.session?.bearerToken && !force) return;
-  const last = Number(await env.STATE.get("lastLogin")) || 0;
-  const wait = last + LOGIN_MIN_INTERVAL_MS - Date.now();
-  if (wait > 0) throw new Error(`login needed but held back for another ${Math.ceil(wait / 60000)} min`);
-  await env.STATE.put("lastLogin", String(Date.now()));
-  log(`logging in · ${ABOUT.name} ${ABOUT.version} · ${ABOUT.repo} · based on Fryyyyy/zeekr_ev_api (MIT)`);
-  const session = await client.login();
-  session.vins = await client.vehicles();
-  await env.STATE.put("session", JSON.stringify(session));
-  log(`logged in (${session.country} account, region ${session.region}), ${session.vins.length} car(s)`);
+async function ensureSession(client, env, force) {
+  const ss = client.session;
+  const login = force || !ss?.bearerToken || ss.email !== client.s.email;
+  if (login) {
+    // A minute's slack, so the 5-minute tick right at the interval is not held back to the next one.
+    const last = Number(await env.STATE.get("lastLogin")) || 0;
+    const wait = last + LOGIN_MIN_INTERVAL_MS - 60_000 - Date.now();
+    if (wait > 0) throw new Error(`login needed but held back for another ${Math.ceil(wait / 60000)} min`);
+    await env.STATE.put("lastLogin", String(Date.now()));
+    log(`logging in · ${ABOUT.name} ${ABOUT.version} · ${ABOUT.repo} · based on Fryyyyy/zeekr_ev_api (MIT)`);
+    await client.login();
+  }
+  // The car list is kept with the session, and asked for again while it is empty. The session is
+  // written once (KV takes one write per key per second), and a new login is kept even when the
+  // car list fails now.
+  if (login || !client.session.vins?.length) {
+    try {
+      client.session.vins = await client.vehicles();
+    } catch (err) {
+      if (login) await env.STATE.put("session", JSON.stringify(client.session));
+      throw err;
+    }
+    const s = client.session;
+    if (login || s.vins.length) await env.STATE.put("session", JSON.stringify(s));
+    log(`${login ? `logged in (${s.country} account, region ${s.region}), ` : ""}${s.vins.length} car(s)`);
+  }
 }
 
 async function checkCars(client, env, config, done) {
@@ -116,8 +129,14 @@ async function checkCars(client, env, config, done) {
       if (action === "enable") {
         if (config.dryRun) log(`${tag} DRY_RUN, command not sent`);
         else {
-          await client.setSentry(vin, true);
-          log(`${tag} sentry start sent`);
+          // A refused or timed-out command still uses its attempt, so the cap holds.
+          try {
+            await client.startSentry(vin);
+            log(`${tag} sentry start sent`);
+          } catch (err) {
+            if (err instanceof SessionLost) throw err;
+            log(`${tag} sentry start failed: ${err.message}`);
+          }
         }
       }
       if (!config.dryRun && JSON.stringify(parking) !== JSON.stringify(before)) {
@@ -160,19 +179,9 @@ function readSecrets(env) {
   return Object.fromEntries(Object.entries(SECRETS).map(([k, name]) => [k, value(name)]));
 }
 
-// Settings arrive as strings (secrets, .dev.vars, environment) or, from tests, as plain values.
 function readConfig(env) {
-  const value = (v, fallback) => {
-    if (v === undefined || v === null || v === "") return fallback;
-    if (typeof v !== "string") return v;
-    try {
-      return JSON.parse(v);
-    } catch {
-      return v;
-    }
-  };
   return {
     fences: parseGeofences(env.GEOFENCES),
-    dryRun: value(env.DRY_RUN, false) === true,
+    dryRun: /^(true|1|yes)$/i.test(String(env.DRY_RUN ?? "").trim()),
   };
 }

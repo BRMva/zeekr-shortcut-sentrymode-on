@@ -5,7 +5,7 @@ import { MAX_ATTEMPTS, decide, distanceM, parseGeofences, readCar } from "../src
 const HOME = { name: "Home", lat: 1.3, lon: 103.8, radius_m: 200 };
 const cfg = { fences: [HOME] };
 const away = { lat: 1.35, lon: 103.85 };
-const car = (o = {}) => ({ gear: "P", speed: 0, driving: null, position: away, battery: 80, sentry: false, ...o });
+const car = (o = {}) => ({ gear: "P", speed: 0, position: away, battery: 80, sentry: false, ...o });
 const status = (basic, running) => ({
   basicVehicleStatus: { position: { latitude: "1.35", longitude: "103.85" }, ...basic },
   additionalVehicleStatus: { drivingBehaviourStatus: running, electricVehicleStatus: { chargeLevel: "76" } },
@@ -14,10 +14,9 @@ const status = (basic, running) => ({
 test("readCar maps the API fields", () => {
   // drivingBehaviourStatus as the car reports it when parked.
   const c = readCar(status({ speed: "0.0" }, { transimissionGearPostion: "", gearAutoStatus: "0", gearManualStatus: "" }), { vstdModeState: "0" });
-  assert.deepEqual(c, { gear: "P", speed: 0, usage: null, driving: null, position: away, battery: 76, sentry: false });
+  assert.deepEqual(c, { gear: "P", speed: 0, usage: null, position: away, battery: 76, sentry: false });
   assert.equal(readCar(status({ usageMode: 1 }, {}), null).usage, "1");
   const unknown = readCar({ basicVehicleStatus: { position: { latitude: "0", longitude: "0" } } }, null);
-  assert.equal(unknown.driving, "gear unknown");
   assert.equal(unknown.gear, null);
   assert.equal(unknown.speed, null);
   assert.equal(unknown.position, null);
@@ -25,15 +24,26 @@ test("readCar maps the API fields", () => {
 });
 
 test("parked means in P; neither a stray speed nor the (lagging) engine status counts", () => {
-  const driving = (basic, running) => readCar(status(basic, running), null).driving;
-  assert.equal(driving({ engineStatus: "engine-running", speed: "0" }, { gearAutoStatus: "0" }), null);
-  assert.equal(driving({ speed: "0" }, { gearAutoStatus: 0 }), null);
-  assert.equal(driving({}, { gearAutoStatus: "0" }), null);
+  const outcome = (basic, running) => decide({ ...readCar(status(basic, running), { vstdModeState: "0" }), position: away }, null, cfg);
+  assert.equal(outcome({ engineStatus: "engine-running", speed: "0" }, { gearAutoStatus: "0" }).action, "enable");
+  assert.equal(outcome({ speed: "0" }, { gearAutoStatus: 0 }).action, "enable");
   // Seen on a car charging at home: in P, reporting 7 km/h.
-  assert.equal(driving({ speed: "7" }, { gearAutoStatus: "0" }), null);
-  assert.equal(driving({ engineStatus: "engine-off", speed: "0" }, { gearAutoStatus: "3" }), "gear 3");
-  assert.equal(driving({ engineStatus: "engine-off" }, undefined), "gear unknown");
-  assert.equal(driving({ speed: "8" }, {}), "gear unknown");
+  assert.equal(outcome({ speed: "7" }, { gearAutoStatus: "0" }).action, "enable");
+  assert.equal(outcome({ engineStatus: "engine-off", speed: "0" }, { gearAutoStatus: "3" }).reason, "not parked (gear 3)");
+  assert.equal(outcome({ speed: "8" }, {}).reason, "gear unknown");
+});
+
+test("a reading without a gear keeps the parking as it is: the owner's 'off' is still respected", () => {
+  const parked = { position: away, attempts: 1, seenOn: true };
+  const r = decide(car({ gear: null }), parked, cfg);
+  assert.deepEqual([r.parking, r.action, r.reason], [parked, "none", "gear unknown"]);
+  assert.match(decide(car(), r.parking, cfg).reason, /respecting/);
+  assert.equal(decide(car({ gear: null }), null, cfg).parking, null);
+
+  // Sentry turned on by attempt 1, seen in a reading without a gear, then switched off by the owner.
+  const after = decide(car({ gear: null, sentry: true }), { position: away, attempts: 1, seenOn: false }, cfg);
+  assert.equal(after.parking.seenOn, true);
+  assert.match(decide(car({ sentry: false }), after.parking, cfg).reason, /respecting/);
 });
 
 test("distance is roughly right", () => {
@@ -42,10 +52,9 @@ test("distance is roughly right", () => {
 });
 
 test("parked away from fences, sentry off -> enable", () => {
-  const r = decide(car(), null, cfg, 1000);
+  const r = decide(car(), null, cfg);
   assert.equal(r.action, "enable");
-  assert.equal(r.parking.attempts, 1);
-  assert.equal(r.parking.since, 1000);
+  assert.deepEqual(r.parking, { position: away, attempts: 1, seenOn: false });
 });
 
 test("inside geofence -> leave alone, no attempt used", () => {
@@ -56,7 +65,7 @@ test("inside geofence -> leave alone, no attempt used", () => {
 });
 
 test("driving clears the parking", () => {
-  const r = decide(car({ gear: "3", speed: 35, driving: "gear 3" }), { attempts: 2 }, cfg);
+  const r = decide(car({ gear: "3", speed: 35 }), { attempts: 2 }, cfg);
   assert.equal(r.parking, null);
   assert.equal(r.action, "none");
   assert.equal(r.reason, "not parked (gear 3)");
@@ -140,4 +149,6 @@ test("geofences: at most 10, and bad lines are named", () => {
   for (const bad of ["Home, 1.3", "Home, , 103.9, 800", "Home, 91, 103.9", "Home, 1.3, 103.9, 0", "Home, 1.3, 103.9, 800, 5", "Home"]) {
     assert.throws(() => parseGeofences(bad), /geofence 1 should look like/, bad);
   }
+  // Only separators is not "no geofences": that must be written as none.
+  for (const empty of [";", " ; ；\n\n", "；"]) assert.throws(() => parseGeofences(empty), /no places; write none/, empty);
 });

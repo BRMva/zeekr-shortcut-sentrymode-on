@@ -23,8 +23,8 @@
   // Logs in the dashboard: Workers & Pages → zeekr-shortcut-sentrymode-on → Logs.
   "observability": { "enabled": true },
 
-  // Settings are secrets added in the Worker's settings after the first deploy: ZEEKR_EMAIL,
-  // ZEEKR_PASSWORD, GEOFENCES (see .dev.vars.example). Variables added in the dashboard are
-  // kept when the Worker is redeployed (Sync fork).
+  // Settings added in the Worker's settings after the first deploy: ZEEKR_PASSWORD as a secret,
+  // ZEEKR_EMAIL and GEOFENCES as text (see .dev.vars.example). keep_vars keeps the text ones
+  // when the Worker is redeployed (Sync fork).
   "keep_vars": true
 }

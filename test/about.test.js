@@ -23,6 +23,7 @@ test("the Worker's URL shows what it is, credits, and what setup is missing (nam
   assert.match(text, /Setup is complete \(geofences: 2\)/);
   assert.doesNotMatch(text, /secret-pw|me@example\.com|103\.8/);
 
-  text = await (await worker.fetch(new Request("https://x/"), { ...env, GEOFENCES: "Home, 1.3" })).text();
+  text = await (await worker.fetch(new Request("https://x/"), { ...env, GEOFENCES: "Work, 1.3; Gym, 1.2834" })).text();
   assert.match(text, /geofence 1 should look like/);
+  assert.doesNotMatch(text, /Work|Gym|1\.2834/);
 });

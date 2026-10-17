@@ -18,7 +18,6 @@ const SECRETS = {
   VIN_KEY: "d".repeat(16),
   VIN_IV: "e".repeat(16),
 };
-const HOME = { name: "Home", lat: 1.3, lon: 103.8, radius_m: 200 };
 
 // The keys of the European app, and Zeekr's two gateway families: each takes only its own keys
 // and knows only its own accounts.
@@ -28,15 +27,19 @@ const GATEWAYS = {
   "gateway-pub-azure.zeekr.eu": { key: EU_KEYS.HMAC_ACCESS_KEY, country: "SE", accounts: { "eu@example.com": "NL" } },
 };
 
+// Cloudflare KV takes one write per key per second: `puts` lists the keys written, so a test can
+// check that a tick writes each key once.
 function kv() {
   const m = new Map();
   return {
     m,
+    puts: [],
     async get(k, o) {
       const v = m.get(k);
       return v === undefined ? null : o?.type === "json" ? JSON.parse(v) : v;
     },
     async put(k, v) {
+      this.puts.push(k);
       m.set(k, v);
     },
     async delete(k) {
@@ -58,6 +61,9 @@ let tokenValid;
 let lostBy;
 let projectId; // X-PROJECT-ID of the last sentry command
 let published; // version in the public repository's package.json; null: unreachable
+let vins; // the account's cars; null: the vehicle list fails
+let refused; // the sentry command is refused
+let lostAtCommand; // the next sentry command finds the session gone
 
 function fakeApi(url, init) {
   const u = new URL(url);
@@ -77,7 +83,7 @@ function fakeApi(url, init) {
   if (gateway) assert.equal(headers.get("country"), gateway.country);
   if (p.endsWith("/region/url")) {
     if (gateway?.country === "SE") return ok([{ countryCode: "NL" }, { countryCode: "SE" }]);
-    return ok([{ countryCode: "SG", regionCode: "SEA", url: { appServerUrl: "https://app.test/", userCenterUrl: "https://uc.test", messageCoreUrl: "https://msg.test/" } }]);
+    return ok([{ countryCode: "SG", regionCode: "SEA", url: { appServerUrl: "https://app.test/", userCenterUrl: "https://uc.test" } }]);
   }
   if (p.endsWith("/auth/checkUserV2")) {
     const country = gateway?.accounts[JSON.parse(init.body).email];
@@ -92,7 +98,9 @@ function fakeApi(url, init) {
   if (u.host.endsWith("-snc-tsp-api-gw.zeekrlife.com") && (!tokenValid || auth !== "BEARER")) {
     return new Response(JSON.stringify(SESSION_LOST[lostBy]));
   }
-  if (p.endsWith("/vehicle-list")) return ok([{ vin: "VIN0000000000ABC123" }]);
+  if (p.endsWith("/vehicle-list")) {
+    return vins ? ok(vins.map((vin) => ({ vin }))) : new Response(JSON.stringify({ success: false, code: "500", msg: "busy" }));
+  }
   if (p.endsWith("/status/latest")) {
     return ok({
       basicVehicleStatus: {
@@ -106,10 +114,15 @@ function fakeApi(url, init) {
   }
   if (p.endsWith("/getVehicleState")) return ok({ vstdModeState: car.sentry ? "1" : "0" });
   if (p.endsWith("/remoteControl/control")) {
+    if (lostAtCommand) {
+      lostAtCommand = false;
+      tokenValid = false;
+      return new Response(JSON.stringify(SESSION_LOST[lostBy]));
+    }
     assert.deepEqual(JSON.parse(init.body), { command: "start", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } });
     assert.ok(headers.get("x-vin"));
     projectId = headers.get("x-project-id");
-    return ok(null);
+    return refused ? new Response(JSON.stringify({ success: false, code: "4001", msg: "refused" })) : ok(null);
   }
   return ok({});
 }
@@ -123,6 +136,9 @@ beforeEach(() => {
   tokenValid = false;
   lostBy = "expiry";
   published = ABOUT.version;
+  vins = ["VIN0000000000ABC123"];
+  refused = false;
+  lostAtCommand = false;
   car = { engine: "engine-off", lat: 1.35, lon: 103.85, sentry: false };
   globalThis.fetch = async (url, init) => fakeApi(url, init);
   console.log = (line) => logs.push(line);
@@ -297,6 +313,134 @@ test("just after midnight UTC, once a day, the log says when a newer version is 
   await announceUpdate(Date.parse("2026-10-17T00:05:00Z"));
   await announceUpdate(Date.parse("2026-10-17T12:00:00Z"));
   assert.equal(calls.length, 0);
-  for (published of [ABOUT.version, "0.0.1", "not a version", null]) await announceUpdate(midnight);
+  for (published of [ABOUT.version, "0.0.1", "not a version", "9.9.9 visit example.com", null]) await announceUpdate(midnight);
   assert.deepEqual(logs, []);
+});
+
+test("a refused sentry command still uses its attempt: six commands, then it gives up", async () => {
+  const state = kv();
+  refused = true;
+  for (let i = 0; i < 8; i++) await run(env(state));
+  assert.equal(sent(), 6);
+  assert.ok(logs.some((l) => /sentry start failed: sentry command rejected/.test(l)), logs.join("\n"));
+  assert.ok(logs.some((l) => /-> none: gave up after 6 attempts$/.test(l)), logs.join("\n"));
+});
+
+test("with no car shared yet, each tick asks for the car list again, and a car shared later is checked", async () => {
+  const state = kv();
+  vins = [];
+  await run(env(state));
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+  assert.equal(calls.filter((c) => c.endsWith("/vehicle-list")).length, 2);
+  assert.ok(logs.some((l) => /logged in \(SG account, region SEA\), 0 car\(s\)$/.test(l)), logs.join("\n"));
+  assert.ok(logs.some((l) => /\] 0 car\(s\)$/.test(l)), logs.join("\n"));
+
+  vins = ["VIN0000000000ABC123"];
+  calls = [];
+  await run(env(state));
+  assert.equal(sent(), 1);
+  assert.equal(JSON.parse(state.m.get("session")).vins.length, 1);
+});
+
+test("a login is kept when the car list fails right after it, so the next tick needs no second login", async () => {
+  const state = kv();
+  vins = null;
+  await assert.rejects(run(env(state)), /vehicle list failed/);
+  assert.equal(JSON.parse(state.m.get("session")).bearerToken, "BEARER");
+
+  vins = ["VIN0000000000ABC123"];
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+  assert.equal(sent(), 1);
+});
+
+test("the stored session holds neither the password nor the user-center token, and a new email logs in again", async () => {
+  const state = kv();
+  await run(env(state));
+  const stored = state.m.get("session");
+  assert.doesNotMatch(stored, /"pw"|"AUTH"|authToken|password/);
+  assert.equal(JSON.parse(stored).email, SECRETS.ZEEKR_EMAIL);
+
+  state.m.set("lastLogin", "0");
+  calls = [];
+  await run(env(state, { ZEEKR_EMAIL: "eu@example.com", ...EU_KEYS }));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+  assert.equal(JSON.parse(state.m.get("session")).email, "eu@example.com");
+});
+
+test("the hold-back lets the 5-minute tick at the 30-minute mark log in", async () => {
+  const state = kv();
+  await run(env(state));
+  tokenValid = false;
+  state.m.set("lastLogin", String(Date.now() - 29.5 * 60_000));
+  calls = [];
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+});
+
+test("DRY_RUN is true, 1 or yes in any case; anything else is live", async () => {
+  for (const DRY_RUN of ["TRUE", "1", "yes", true]) await run(env(kv(), { DRY_RUN }));
+  assert.equal(sent(), 0);
+  for (const DRY_RUN of ["no", "", false]) await run(env(kv(), { DRY_RUN }));
+  assert.equal(sent(), 3);
+});
+
+test("a tick writes each KV key at most once, also when it logs in (KV: one write per key per second)", async () => {
+  const twice = (state) => state.puts.filter((k, i) => state.puts.indexOf(k) !== i);
+  const state = kv();
+  await run(env(state)); // first login, car away: lastLogin, session, parking
+  assert.deepEqual(twice(state), []);
+
+  state.puts = [];
+  state.m.set("lastLogin", "0");
+  tokenValid = false;
+  car.lat = 1.4; // a new parking, so the parking key is written too
+  await run(env(state)); // token expired: logs in again within the tick
+  assert.deepEqual(twice(state), []);
+  assert.ok(state.puts.includes("session"));
+
+  state.puts = [];
+  vins = null;
+  state.m.set("lastLogin", "0");
+  await run(env(state, { ZEEKR_EMAIL: "eu@example.com", ...EU_KEYS })).catch(() => {}); // car list fails after login
+  assert.deepEqual(twice(state), []);
+});
+
+test("the session found gone at the sentry command: one login, the command sent again, one attempt counted", async () => {
+  const state = kv();
+  await run(env(state));
+  assert.equal(sent(), 1);
+
+  state.m.set("lastLogin", "0");
+  car.lat = 1.4; // a new parking: attempt 1 again
+  lostAtCommand = true;
+  calls = [];
+  logs = [];
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+  assert.equal(sent(), 2); // the one that found the session gone, then the one after logging in
+  assert.equal(JSON.parse(state.m.get("parking:VIN0000000000ABC123")).attempts, 1);
+  assert.ok(!logs.some((l) => /sentry start failed/.test(l)), logs.join("\n"));
+});
+
+test("upgrading from a 0.4.3 session (no email, a stored user-center token): one login, then none", async () => {
+  const state = kv();
+  await run(env(state));
+  const old = JSON.parse(state.m.get("session"));
+  delete old.email;
+  old.authToken = "AUTH";
+  state.m.set("session", JSON.stringify(old));
+  state.m.set("lastLogin", "0");
+
+  calls = [];
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 1);
+  const now = JSON.parse(state.m.get("session"));
+  assert.equal(now.email, SECRETS.ZEEKR_EMAIL);
+  assert.equal(now.authToken, undefined);
+
+  calls = [];
+  await run(env(state));
+  assert.equal(calls.filter((c) => c.endsWith("/loginByEmailEncrypt")).length, 0);
 });

@@ -1,5 +1,5 @@
-// zeekr-sentry 0.4.2 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
-// Turns Zeekr sentry mode on when the car is parked and locked away from your places.
+// zeekr-sentry 0.4.4 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
+// Turns Zeekr sentry mode on when the car is parked away from your places.
 // Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code
 // editor. Step by step: docs/setup-manual.md in the repository above.
 // Based on:
@@ -12,7 +12,7 @@
 // src/about.js
 var ABOUT = {
   name: "zeekr-sentry",
-  version: "0.4.2",
+  version: "0.4.4",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
@@ -27,7 +27,7 @@ var TAG = `[v${ABOUT.version}]`;
 function aboutText() {
   return [
     `${ABOUT.name} ${ABOUT.version}`,
-    "Turns Zeekr sentry mode on when the car is parked and locked away from your geofences.",
+    "Turns Zeekr sentry mode on when the car is parked away from your geofences.",
     `Source: ${ABOUT.repo} (${ABOUT.license}) by ${ABOUT.author}`,
     "Based on:",
     ...ABOUT.credits.map((c) => `  ${c}`)
@@ -306,7 +306,7 @@ var FAMILIES = [
     // One set of servers for every country, in the shape of a region-list entry.
     servers: {
       regionCode: "EU",
-      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/`, messageCoreUrl: `${EU_GATEWAY}eu-message-core/` }
+      url: { appServerUrl: `${EU_GATEWAY}overseas-app/`, userCenterUrl: `${EU_GATEWAY}zeekr-cuc-idaas/` }
     }
   }
 ];
@@ -387,13 +387,13 @@ var ZeekrClient = class {
     });
     return readJson(resp);
   }
-  async app(method, path, { query = "", body, vin, auth = this.session?.bearerToken ?? "" } = {}) {
+  async app(method, path, { query = "", body, vin } = {}) {
     const ss = this.session;
     const url = `${ss.loginServer}${path}${query}`;
     const headers = {
       "ACCEPT-LANGUAGE": "en-AU",
       AppId: "ONEX97FB91F061405",
-      authorization: auth,
+      authorization: ss.bearerToken ?? "",
       "Content-Type": "application/json; charset=UTF-8",
       "user-agent": "okhttp/4.12.0",
       "X-API-SIGNATURE-VERSION": "2.0",
@@ -417,8 +417,9 @@ var ZeekrClient = class {
   }
   // ---- login (same calls and order as the Python client) ----
   // The country is not a setting: the user directory reports the account's registered country.
+  // The session keeps the email it was made for, so a changed ZEEKR_EMAIL means a new login.
   async login() {
-    const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID() };
+    const ss = { deviceId: this.session?.deviceId ?? crypto.randomUUID(), email: this.s.email };
     this.authToken = null;
     const checkUser = (userCenter) => this.gateway("POST", `${userCenter}auth/checkUserV2`, { email: this.s.email, checkType: "1" });
     const rejected = [];
@@ -444,13 +445,12 @@ var ZeekrClient = class {
     const block = this.family.servers ?? (urls.data ?? []).find((b) => (b.countryCode ?? "").toLowerCase() === ss.country.toLowerCase());
     ss.appServer = block?.url?.appServerUrl ?? "";
     ss.userCenter = block?.url?.userCenterUrl ?? "";
-    ss.messageCore = block?.url?.messageCoreUrl ?? "";
     ss.region = block?.regionCode ?? "";
     ss.loginServer = LOGIN_SERVERS[ss.region];
-    if (!ss.appServer || !ss.userCenter || !ss.messageCore || !ss.loginServer) {
+    if (!ss.appServer || !ss.userCenter || !ss.loginServer) {
       throw new ZeekrError(`accounts registered in ${ss.country} are not supported (region ${ss.region || "unknown"})`);
     }
-    for (const k of ["appServer", "userCenter", "messageCore"]) if (!ss[k].endsWith("/")) ss[k] += "/";
+    for (const k of ["appServer", "userCenter"]) if (!ss[k].endsWith("/")) ss[k] += "/";
     ss.projectId = PROJECT_IDS[ss.region] ?? "ZEEKR_SEA";
     if (ss.userCenter !== this.family.userCenter) {
       const check = await checkUser(ss.userCenter);
@@ -466,7 +466,6 @@ var ZeekrClient = class {
       throw new ZeekrError(`login failed ${brief(login)}`);
     }
     this.authToken = login.data.tokenValue;
-    ss.authToken = this.authToken;
     await this.gateway("POST", `${ss.userCenter}user/info`);
     await this.gateway("POST", `${ss.appServer}protocol/service/getProtocol`, { country: ss.country });
     await this.gateway("GET", `${ss.appServer}member/inbox/home`);
@@ -475,7 +474,6 @@ var ZeekrClient = class {
     await this.gateway("GET", `${ss.userCenter}user/updateLanguage?language=en`);
     this.session = ss;
     const bearer = await this.app("POST", "ms-user-auth/v1.0/auth/login", {
-      auth: "",
       body: {
         identifier: tsp.data.code,
         identityType: 10,
@@ -507,14 +505,13 @@ var ZeekrClient = class {
     if (!r.success) throw new ZeekrError(`remote state failed ${brief(r)}`);
     return r.data ?? {};
   }
-  // Same command the Home Assistant integration sends for its Sentry Mode switch.
-  async setSentry(vin, on) {
+  // Same command the Home Assistant integration sends to switch Sentry Mode on.
+  async startSentry(vin) {
     const r = await this.app("POST", "ms-remote-control/v1.0/remoteControl/control", {
       vin,
-      body: { command: on ? "start" : "stop", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } }
+      body: { command: "start", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } }
     });
     if (!r.success) throw new ZeekrError(`sentry command rejected ${brief(r)}`);
-    return r;
   }
 };
 
@@ -537,8 +534,6 @@ function readCar(status, remoteState) {
     gear: gear === null ? null : gear === 0 ? "P" : String(gear),
     speed,
     usage: usage === void 0 || usage === null || usage === "" ? null : String(usage),
-    // Why the car counts as driving, or null when it is parked.
-    driving: gear === null ? "gear unknown" : gear === 0 ? null : `gear ${gear}`,
     position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
     battery: num(extra.electricVehicleStatus?.chargeLevel),
     sentry: sentry === void 0 || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase())
@@ -562,20 +557,25 @@ function parseGeofences(text) {
   text = narrow(String(text ?? ""));
   if (text.trim().toLowerCase() === "none") return [];
   const places = text.split(/[\n;]+/).map((s) => s.trim()).filter(Boolean);
+  if (!places.length && text.trim()) throw new Error(`GEOFENCES has no places; write none for no geofences`);
   if (places.length > MAX_FENCES) throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
   return places.map((place, i) => {
     const parts = place.split(",").map((s) => s.trim());
     const name = parts[0] !== "" && Number.isFinite(Number(parts[0])) ? `place ${i + 1}` : parts.shift();
     const [lat, lon, radius = DEFAULT_RADIUS_M] = parts.map(Number);
     const valid = (parts.length === 2 || parts.length === 3) && parts.every((p) => p !== "") && [lat, lon, radius].every(Number.isFinite) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && radius > 0;
-    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600", got "${place}"`);
+    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600"`);
     return { name, lat, lon, radius_m: radius };
   });
 }
-function decide(car, parking, { fences }, now = Date.now()) {
-  if (car.driving) return { parking: null, action: "none", reason: `not parked (${car.driving})` };
+function decide(car, parking, { fences }) {
+  if (car.gear === null) {
+    const seen = parking && car.sentry === true && !parking.seenOn ? { ...parking, seenOn: true } : parking;
+    return { parking: seen, action: "none", reason: "gear unknown" };
+  }
+  if (car.gear !== "P") return { parking: null, action: "none", reason: `not parked (gear ${car.gear})` };
   const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
-  const p = !parking || moved ? { since: now, position: car.position, attempts: 0, seenOn: false } : { ...parking };
+  const p = !parking || moved ? { position: car.position, attempts: 0, seenOn: false } : { ...parking };
   if (!p.position && car.position) p.position = car.position;
   if (car.sentry === true) {
     p.seenOn = true;
@@ -610,7 +610,6 @@ var SECRETS = {
   vinKey: "VIN_KEY",
   vinIv: "VIN_IV"
 };
-var ENV_NAMES = [...Object.values(SECRETS), "GEOFENCES", "DRY_RUN"];
 var NO_STORAGE = "no storage: bind a KV namespace named STATE (Worker → Settings → Bindings)";
 function setupProblems(env) {
   const problems = [];
@@ -631,12 +630,12 @@ async function run(env) {
   const client = new ZeekrClient(secrets, await env.STATE.get("session", { type: "json" }));
   const done = /* @__PURE__ */ new Set();
   try {
-    await ensureSession(client, env, config, false);
+    await ensureSession(client, env, false);
     await checkCars(client, env, config, done);
   } catch (err) {
     if (!(err instanceof SessionLost)) throw err;
     log(`${err.message}, logging in again`);
-    await ensureSession(client, env, config, true);
+    await ensureSession(client, env, true);
     await checkCars(client, env, config, done);
   } finally {
     await announceUpdate();
@@ -648,7 +647,9 @@ async function announceUpdate(now = Date.now()) {
   if (t.getUTCHours() !== 0 || t.getUTCMinutes() >= 5) return;
   try {
     const { version } = await (await fetch(LATEST, { signal: AbortSignal.timeout(1e4) })).json();
-    if (newer(version, ABOUT.version)) log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+    if (/^\d+\.\d+\.\d+$/.test(version) && newer(version, ABOUT.version)) {
+      log(`version ${version} is available, see ${ABOUT.repo}; to upgrade, Sync fork on GitHub`);
+    }
   } catch {
   }
 }
@@ -657,17 +658,28 @@ function newer(a, b) {
   const i = [0, 1, 2].find((k) => x[k] !== y[k]);
   return i !== void 0 && x[i] > y[i];
 }
-async function ensureSession(client, env, config, force) {
-  if (client.session?.bearerToken && !force) return;
-  const last = Number(await env.STATE.get("lastLogin")) || 0;
-  const wait = last + LOGIN_MIN_INTERVAL_MS - Date.now();
-  if (wait > 0) throw new Error(`login needed but held back for another ${Math.ceil(wait / 6e4)} min`);
-  await env.STATE.put("lastLogin", String(Date.now()));
-  log(`logging in · ${ABOUT.name} ${ABOUT.version} · ${ABOUT.repo} · based on Fryyyyy/zeekr_ev_api (MIT)`);
-  const session = await client.login();
-  session.vins = await client.vehicles();
-  await env.STATE.put("session", JSON.stringify(session));
-  log(`logged in (${session.country} account, region ${session.region}), ${session.vins.length} car(s)`);
+async function ensureSession(client, env, force) {
+  const ss = client.session;
+  const login = force || !ss?.bearerToken || ss.email !== client.s.email;
+  if (login) {
+    const last = Number(await env.STATE.get("lastLogin")) || 0;
+    const wait = last + LOGIN_MIN_INTERVAL_MS - 6e4 - Date.now();
+    if (wait > 0) throw new Error(`login needed but held back for another ${Math.ceil(wait / 6e4)} min`);
+    await env.STATE.put("lastLogin", String(Date.now()));
+    log(`logging in · ${ABOUT.name} ${ABOUT.version} · ${ABOUT.repo} · based on Fryyyyy/zeekr_ev_api (MIT)`);
+    await client.login();
+  }
+  if (login || !client.session.vins?.length) {
+    try {
+      client.session.vins = await client.vehicles();
+    } catch (err) {
+      if (login) await env.STATE.put("session", JSON.stringify(client.session));
+      throw err;
+    }
+    const s = client.session;
+    if (login || s.vins.length) await env.STATE.put("session", JSON.stringify(s));
+    log(`${login ? `logged in (${s.country} account, region ${s.region}), ` : ""}${s.vins.length} car(s)`);
+  }
 }
 async function checkCars(client, env, config, done) {
   for (const vin of client.session.vins ?? []) {
@@ -688,8 +700,13 @@ async function checkCars(client, env, config, done) {
       if (action === "enable") {
         if (config.dryRun) log(`${tag} DRY_RUN, command not sent`);
         else {
-          await client.setSentry(vin, true);
-          log(`${tag} sentry start sent`);
+          try {
+            await client.startSentry(vin);
+            log(`${tag} sentry start sent`);
+          } catch (err) {
+            if (err instanceof SessionLost) throw err;
+            log(`${tag} sentry start failed: ${err.message}`);
+          }
         }
       }
       if (!config.dryRun && JSON.stringify(parking) !== JSON.stringify(before)) {
@@ -726,18 +743,9 @@ function readSecrets(env) {
   return Object.fromEntries(Object.entries(SECRETS).map(([k, name]) => [k, value(name)]));
 }
 function readConfig(env) {
-  const value = (v, fallback) => {
-    if (v === void 0 || v === null || v === "") return fallback;
-    if (typeof v !== "string") return v;
-    try {
-      return JSON.parse(v);
-    } catch {
-      return v;
-    }
-  };
   return {
     fences: parseGeofences(env.GEOFENCES),
-    dryRun: value(env.DRY_RUN, false) === true
+    dryRun: /^(true|1|yes)$/i.test(String(env.DRY_RUN ?? "").trim())
   };
 }
 

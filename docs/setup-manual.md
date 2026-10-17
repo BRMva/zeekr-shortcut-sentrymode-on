@@ -40,7 +40,8 @@ the settings that are still missing, which means the program is running.
 ## Step 3: Create the storage space and connect it
 
 1. In the left menu, open **Storage & databases** → **Workers KV** and click **Create a KV namespace**. Name it
-   `zeekr-shortcut-sentrymode-on-state` (any name works; this one matches the rest of the guide) and create it.
+   `zeekr-sentry-state` and create it. (Not `zeekr-shortcut-sentrymode-on-state`: the setup with GitHub creates a
+   storage space with that name, and fails if one already exists.)
 
    ![Workers KV, then Create a KV namespace](images/kv-list.jpg)
 
@@ -63,13 +64,13 @@ A new schedule can take up to 15 minutes to start.
 
 On the Worker's **Settings** page, under **Runtime variables and secrets**, click **+ Add variable** (3 in the Step 3
 picture). Fill in a row for each of the three settings: the name in **Key**, the value in **Value**, and tick
-**Secret**; **+ Add** gives you the next row. Then click **Add variable and deploy**.
+**Secret** where the table says so; **+ Add** gives you the next row. Then click **Add variable and deploy**.
 
-| Key | Value |
-|---|---|
-| `ZEEKR_EMAIL` | the second account's email address |
-| `ZEEKR_PASSWORD` | the second account's password |
-| `GEOFENCES` | your places, for example `Home, 1.3521, 103.8198, 600` |
+| Key | Value | Secret |
+|---|---|---|
+| `ZEEKR_EMAIL` | the second account's email address | don't tick |
+| `ZEEKR_PASSWORD` | the second account's password | **always tick it** |
+| `GEOFENCES` | your places, for example `Home, 1.3521, 103.8198, 600` | don't tick |
 
 ![Key, Value and Secret; + Add for the next row; then Add variable and deploy](images/add-variables.jpg)
 
@@ -83,14 +84,22 @@ picture). Fill in a row for each of the three settings: the name in **Key**, the
   ![The Observability tab](images/logs.jpg)
 
 Anyone can open the Worker's address, but it only shows the version, the credits and the names of the settings, never
-your email, password or places. Visits from places you don't recognise in the log are usually automated scanners
-and can be ignored.
+your email, password or places. Still, once it says `Setup is complete`, switch it off (Step 7).
+
+## Step 7: Switch off the Worker's address
+
+The address is only for the check in Step 6. Open the Worker's **Domains** tab (1) and, under **Worker URL**, switch
+off **Production** and **Preview** (2). The schedule keeps running; only the address stops answering. To use the
+check again later, switch **Production** back on for a moment.
+
+![Domains: switch off both Worker URL switches](images/domains-workers-dev.jpg)
 
 ## After that
 
 Reading the log, changing settings, pausing, uninstalling and the FAQ are the same as for the setup with GitHub: see
 [Everyday use](../README.md#everyday-use) and [FAQ](../README.md#faq). Two differences:
 
-- **Uninstalling:** there is no fork to delete, and no GitHub access to take back.
+- **Uninstalling:** the storage space to delete is `zeekr-sentry-state`; there is no fork to delete, and no GitHub
+  access to take back.
 - **Upgrading:** when the log says `version … is available …`, copy the new version of the file as in step 2, replace
   everything in **Edit code** and click **Deploy**. Your settings stay as they are.
