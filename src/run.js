@@ -126,19 +126,26 @@ async function checkCars(client, env, config, done) {
       const { parking, action, reason } = decide(car, before, config);
 
       log(`${tag} ${describe(car, config.fences)} -> ${action}: ${reason}`);
-      if (action === "enable") {
-        if (config.dryRun) log(`${tag} DRY_RUN, command not sent`);
-        else {
-          // A refused or timed-out command still uses its attempt, so the cap holds.
+      if (action === "enable" || action === "disable") {
+        const verb = action === "enable" ? "start" : "stop";
+
+        if (config.dryRun) {
+          log(`${tag} DRY_RUN, sentry ${verb} command not sent`);
+        } else {
           try {
-            await client.startSentry(vin);
-            log(`${tag} sentry start sent`);
+            if (action === "enable") {
+              await client.startSentry(vin);
+            } else {
+              await client.stopSentry(vin);
+            }
+            log(`${tag} sentry ${verb} command sent`);
           } catch (err) {
             if (err instanceof SessionLost) throw err;
-            log(`${tag} sentry start failed: ${err.message}`);
+            log(`${tag} sentry ${verb} failed: ${err.message}`);
           }
         }
       }
+
       if (!config.dryRun && JSON.stringify(parking) !== JSON.stringify(before)) {
         if (parking) await env.STATE.put(key, JSON.stringify(parking));
         else await env.STATE.delete(key);
