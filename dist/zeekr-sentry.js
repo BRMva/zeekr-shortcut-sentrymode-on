@@ -1,20 +1,18 @@
-// zeekr-sentry 0.4.5 [was edited by Manochvarma on 17.10.2026 at 10.54PM (GMT-8)-add the stop button if the GEOFENCE is within the range but due to the fluctuation of coordinates, the Sentry Mode got ON. So this code will check and if it falls on the range it will turn the Sentry Mode to OFF — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
-// Keeps Zeekr sentry mode off inside configured geofences and turns it on when parked outside them.
+// zeekr-sentry 0.4.4 — https://github.com/dts88/zeekr-shortcut-sentrymode-on (MIT) by dts88
+// Turns Zeekr sentry mode on when the car is parked away from your places.
 // Single-file version: create a Worker in the Cloudflare dashboard and paste ALL of this file into its code
 // editor. Step by step: docs/setup-manual.md in the repository above.
-// Set GEOFENCES to one fence per line: Name, latitude, longitude, radius-in-metres.
-// Each fence supplies its own radius; this Worker does not impose a radius.
 // Based on:
 //   Fryyyyy/zeekr_ev_api (MIT): Zeekr API, login and request signing
 //   Fryyyyy/zeekr_homeassistant (MIT): sentry command and status fields
 //   wysie/zeekr_key_extractor (MIT): app constants from the public Zeekr app
 //   borconi/openzeekr (MIT): the European servers
-// This 0.4.5 variant is based on the published 0.4.4 bundle; only GEOFENCES radius parsing and descriptions were changed.
+// Built from src/ (npm run build); do not edit by hand.
 
 // src/about.js
 var ABOUT = {
   name: "zeekr-sentry",
-  version: "0.4.5",
+  version: "0.4.4",
   author: "dts88",
   repo: "https://github.com/dts88/zeekr-shortcut-sentrymode-on",
   license: "MIT",
@@ -29,7 +27,7 @@ var TAG = `[v${ABOUT.version}]`;
 function aboutText() {
   return [
     `${ABOUT.name} ${ABOUT.version}`,
-    "Keeps Zeekr sentry mode off inside configured geofences and turns it on when parked outside them.",
+    "Turns Zeekr sentry mode on when the car is parked away from your geofences.",
     `Source: ${ABOUT.repo} (${ABOUT.license}) by ${ABOUT.author}`,
     "Based on:",
     ...ABOUT.credits.map((c) => `  ${c}`)
@@ -515,13 +513,13 @@ var ZeekrClient = class {
     });
     if (!r.success) throw new ZeekrError(`sentry command rejected ${brief(r)}`);
   }
-  // Same command shape as the Home Assistant integration uses to switch Sentry Mode off.
+  // Same command the Home Assistant integration sends to switch Sentry Mode off.
   async stopSentry(vin) {
     const r = await this.app("POST", "ms-remote-control/v1.0/remoteControl/control", {
       vin,
       body: { command: "stop", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } }
     });
-    if (!r.success) throw new ZeekrError(`sentry command rejected ${brief(r)}`);
+    if (!r.success) throw new ZeekrError(`sentry stop rejected ${brief(r)}`);
   }
 };
 
@@ -538,12 +536,10 @@ function readCar(status, remoteState) {
   const lon = num(basic.position?.longitude);
   const sentry = remoteState?.vstdModeState;
   const gear = num(extra.drivingBehaviourStatus?.gearAutoStatus);
-  const speed = num(basic.speed);
-  const usage = basic.usageMode;
   return {
     gear: gear === null ? null : gear === 0 ? "P" : String(gear),
-    speed,
-    usage: usage === void 0 || usage === null || usage === "" ? null : String(usage),
+    speed: num(basic.speed),
+    usage: basic.usageMode === void 0 || basic.usageMode === null || basic.usageMode === "" ? null : String(basic.usageMode),
     position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
     battery: num(extra.electricVehicleStatus?.chargeLevel),
     sentry: sentry === void 0 || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase())
@@ -560,57 +556,146 @@ function insideFence(position, fences) {
   return fences.find((f) => distanceM(position, f) <= f.radius_m) ?? null;
 }
 var MAX_FENCES = 10;
+var DEFAULT_RADIUS_M = 600;
 var NARROW = { "、": ",", "。": ".", "−": "-", "　": " " };
-var narrow = (text) => text.replace(/[！-～、。−　]/g, (c) => NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 65248));
+var narrow = (text) => text.replace(
+  /[！-～、。−　]/g,
+  (c) => NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 65248)
+);
 function parseGeofences(text) {
   text = narrow(String(text ?? ""));
   if (text.trim().toLowerCase() === "none") return [];
   const places = text.split(/[\n;]+/).map((s) => s.trim()).filter(Boolean);
-  if (!places.length && text.trim()) throw new Error(`GEOFENCES has no places; write none for no geofences`);
-  if (places.length > MAX_FENCES) throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
+  if (!places.length && text.trim()) {
+    throw new Error("GEOFENCES has no places; write none for no geofences");
+  }
+  if (places.length > MAX_FENCES) {
+    throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
+  }
   return places.map((place, i) => {
     const parts = place.split(",").map((s) => s.trim());
     const name = parts[0] !== "" && Number.isFinite(Number(parts[0])) ? `place ${i + 1}` : parts.shift();
-    // The radius is intentionally required: every fence uses the radius supplied in GEOFENCES.
-    const [lat, lon, radius] = parts.map(Number);
-    const valid = parts.length === 3 && parts.every((p) => p !== "") && [lat, lon, radius].every(Number.isFinite) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && radius > 0;
-    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 50" (name, latitude, longitude, radius in metres)`);
+    const [lat, lon, radius = DEFAULT_RADIUS_M] = parts.map(Number);
+    const valid = (parts.length === 2 || parts.length === 3) && parts.every((p) => p !== "") && [lat, lon, radius].every(Number.isFinite) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && radius > 0;
+    if (!valid) {
+      throw new Error(
+        `geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600"`
+      );
+    }
     return { name, lat, lon, radius_m: radius };
   });
 }
 function decide(car, parking, { fences }) {
   if (car.gear === null) {
-    const seen = parking && car.sentry === true && !parking.seenOn ? { ...parking, seenOn: true } : parking;
-    return { parking: seen, action: "none", reason: "gear unknown" };
+    const updatedParking = parking && car.sentry === true ? { ...parking, seenOn: true } : parking;
+    return {
+      parking: updatedParking,
+      action: "none",
+      reason: "gear unknown"
+    };
   }
-  if (car.gear !== "P") return { parking: null, action: "none", reason: `not parked (gear ${car.gear})` };
+  if (car.gear !== "P") {
+    return {
+      parking: null,
+      action: "none",
+      reason: `not parked (gear ${car.gear})`
+    };
+  }
   const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
-  const p = !parking || moved ? { position: car.position, attempts: 0, seenOn: false } : { ...parking };
+  const p = !parking || moved ? {
+    position: car.position,
+    attempts: 0,
+    seenOn: false
+  } : {
+    ...parking,
+    attempts: parking.attempts ?? 0,
+    seenOn: parking.seenOn ?? false,
+    manualOff: parking.manualOff ?? false
+  };
   if (!p.position && car.position) p.position = car.position;
-  if (fences.length) {
-    if (!car.position) return { parking: p, action: "none", reason: "no position, cannot check geofence" };
-    const fence = insideFence(car.position, fences);
-    if (fence) {
-      // Home is authoritative: clear any previous manual-off override for the next parking session.
-      p.seenOn = false;
-      if (car.sentry === null) return { parking: p, action: "none", reason: `inside geofence "${fence.name}", sentry state unknown` };
-      if (car.sentry === true) return { parking: p, action: "disable", reason: `inside geofence "${fence.name}"` };
-      return { parking: p, action: "none", reason: `inside geofence "${fence.name}", sentry off` };
+  if (fences.length && !car.position) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "no position, cannot check geofence"
+    };
+  }
+  const fence = car.position ? insideFence(car.position, fences) : null;
+  if (fence) {
+    p.seenOn = false;
+    p.manualOff = false;
+    p.attempts = 0;
+    if (car.sentry === true) {
+      return {
+        parking: p,
+        action: "disable",
+        reason: `inside geofence "${fence.name}", turning sentry off`
+      };
     }
+    return {
+      parking: p,
+      action: "none",
+      reason: car.sentry === false ? `inside geofence "${fence.name}", sentry already off` : `inside geofence "${fence.name}", sentry state unknown`
+    };
   }
   if (car.sentry === true) {
     p.seenOn = true;
-    return { parking: p, action: "none", reason: "sentry on" };
+    p.manualOff = false;
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry on"
+    };
   }
-  if (p.seenOn) return { parking: p, action: "none", reason: "sentry turned off during this parking, respecting it" };
-  if (car.sentry === null) return { parking: p, action: "none", reason: "sentry state unknown" };
+  if (p.seenOn) {
+    p.manualOff = true;
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry turned off during this parking, respecting it"
+    };
+  }
+  if (p.manualOff) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "manual sentry off override"
+    };
+  }
+  if (car.sentry === null) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry state unknown"
+    };
+  }
   if (car.battery !== null && car.battery < MIN_BATTERY) {
-    return { parking: p, action: "none", reason: `battery ${car.battery}% below ${MIN_BATTERY}%` };
+    return {
+      parking: p,
+      action: "none",
+      reason: `battery ${car.battery}% below ${MIN_BATTERY}%`
+    };
   }
-  if (IN_USE.has(car.usage)) return { parking: p, action: "none", reason: `car in use (usage ${car.usage})` };
-  if (p.attempts >= MAX_ATTEMPTS) return { parking: p, action: "none", reason: `gave up after ${MAX_ATTEMPTS} attempts` };
+  if (IN_USE.has(car.usage)) {
+    return {
+      parking: p,
+      action: "none",
+      reason: `car in use (usage ${car.usage})`
+    };
+  }
+  if (p.attempts >= MAX_ATTEMPTS) {
+    return {
+      parking: p,
+      action: "none",
+      reason: `gave up after ${MAX_ATTEMPTS} attempts`
+    };
+  }
   p.attempts += 1;
-  return { parking: p, action: "enable", reason: `attempt ${p.attempts}/${MAX_ATTEMPTS}` };
+  return {
+    parking: p,
+    action: "enable",
+    reason: `attempt ${p.attempts}/${MAX_ATTEMPTS}`
+  };
 }
 
 // src/run.js
@@ -714,19 +799,20 @@ async function checkCars(client, env, config, done) {
       const { parking, action, reason } = decide(car, before, config);
       log(`${tag} ${describe(car, config.fences)} -> ${action}: ${reason}`);
       if (action === "enable" || action === "disable") {
-        if (config.dryRun) log(`${tag} DRY_RUN, sentry ${action} command not sent`);
-        else {
+        const verb = action === "enable" ? "start" : "stop";
+        if (config.dryRun) {
+          log(`${tag} DRY_RUN, sentry ${verb} command not sent`);
+        } else {
           try {
             if (action === "enable") {
               await client.startSentry(vin);
-              log(`${tag} sentry start sent`);
             } else {
               await client.stopSentry(vin);
-              log(`${tag} sentry stop sent`);
             }
+            log(`${tag} sentry ${verb} command sent`);
           } catch (err) {
             if (err instanceof SessionLost) throw err;
-            log(`${tag} sentry ${action} failed: ${err.message}`);
+            log(`${tag} sentry ${verb} failed: ${err.message}`);
           }
         }
       }

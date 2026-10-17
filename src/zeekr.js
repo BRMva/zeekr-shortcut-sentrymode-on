@@ -279,4 +279,3 @@ export class ZeekrClient {
     if (!r.success) throw new ZeekrError(`sentry stop rejected ${brief(r)}`);
   }
 }
-}

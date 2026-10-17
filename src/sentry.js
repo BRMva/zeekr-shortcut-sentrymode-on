@@ -118,13 +118,18 @@ export function parseGeofences(text) {
 
 // Actions: "enable", "disable", "none".
 export function decide(car, parking, { fences }) {
-  if (car.gear === null) {
-    return {
-      parking,
-      action: "none",
-      reason: "gear unknown",
-    };
-  }
+if (car.gear === null) {
+  const updatedParking =
+    parking && car.sentry === true
+      ? { ...parking, seenOn: true }
+      : parking;
+
+  return {
+    parking: updatedParking,
+    action: "none",
+    reason: "gear unknown",
+  };
+}
 
   if (car.gear !== "P") {
     return {
@@ -145,7 +150,6 @@ export function decide(car, parking, { fences }) {
           position: car.position,
           attempts: 0,
           seenOn: false,
-          manualOff: false,
         }
       : {
           ...parking,
