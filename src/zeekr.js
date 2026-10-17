@@ -270,4 +270,13 @@ export class ZeekrClient {
     });
     if (!r.success) throw new ZeekrError(`sentry command rejected ${brief(r)}`);
   }
+  // Same command the Home Assistant integration sends to switch Sentry Mode off.
+  async stopSentry(vin) {
+    const r = await this.app("POST", "ms-remote-control/v1.0/remoteControl/control", {
+      vin,
+      body: { command: "stop", serviceId: "RSM", setting: { serviceParameters: [{ key: "rsm", value: "6" }] } },
+    });
+    if (!r.success) throw new ZeekrError(`sentry stop rejected ${brief(r)}`);
+  }
+}
 }
