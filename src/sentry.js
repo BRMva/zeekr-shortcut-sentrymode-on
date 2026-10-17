@@ -1,29 +1,17 @@
-// Sentry decision: one pure function from (car reading, remembered parking, config) to an action.
-//
-// A "parking" starts when the car is first seen parked (in P), and ends when it is seen in another
-// gear or found more than NEW_PARKING_M from where the parking started; a reading without a gear
-// changes nothing. Within one parking:
-//   - inside a geofence            -> leave sentry alone
-//   - sentry seen on at any point  -> done; if it later goes off (owner or car turned it off), respect that
-//   - otherwise                    -> turn it on, up to MAX_ATTEMPTS times, once the preconditions hold
+
+ // Sentry decision: choose an action from the car reading, remembered parking and config.
 
 export const NEW_PARKING_M = 300;
 export const MAX_ATTEMPTS = 6;
 export const MIN_BATTERY = 20; // %
 
-// Usage modes in which the car is switched on and in use, and does not take the remote sentry
-// command: 4 ready to drive, 13 active (seen with someone in the car in P). Names from the Home
-// Assistant integration; any other mode (0 asleep, 1 parked, 2 unlocked, ...) gets the command.
 const IN_USE = new Set(["4", "13"]);
 
-const num = (v) => (v === undefined || v === null || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
+const num = (v) =>
+  v === undefined || v === null || v === "" || Number.isNaN(Number(v))
+    ? null
+    : Number(v);
 
-// Field meanings follow the Home Assistant integration (sensor.py, switch.py); the gear is the
-// automatic gear position in drivingBehaviourStatus, 0 being P (as a parked car reports it).
-// Parked means in P: the gear follows the car at once, and a car in P cannot move. The speed is
-// shown only, as a parked car now and then reports one (7 km/h while charging at home). The engine
-// status is not used: it lags behind the car by minutes ("engine-off" well into a drive). The
-// usage mode is the car's power state (see IN_USE).
 export function readCar(status, remoteState) {
   const basic = status.basicVehicleStatus ?? {};
   const extra = status.additionalVehicleStatus ?? {};
@@ -31,15 +19,25 @@ export function readCar(status, remoteState) {
   const lon = num(basic.position?.longitude);
   const sentry = remoteState?.vstdModeState;
   const gear = num(extra.drivingBehaviourStatus?.gearAutoStatus);
-  const speed = num(basic.speed);
-  const usage = basic.usageMode;
+
   return {
     gear: gear === null ? null : gear === 0 ? "P" : String(gear),
-    speed,
-    usage: usage === undefined || usage === null || usage === "" ? null : String(usage),
-    position: lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : null,
+    speed: num(basic.speed),
+    usage:
+      basic.usageMode === undefined ||
+      basic.usageMode === null ||
+      basic.usageMode === ""
+        ? null
+        : String(basic.usageMode),
+    position:
+      lat !== null && lon !== null && !(lat === 0 && lon === 0)
+        ? { lat, lon }
+        : null,
     battery: num(extra.electricVehicleStatus?.chargeLevel),
-    sentry: sentry === undefined || sentry === null ? null : ["1", "true"].includes(String(sentry).toLowerCase()),
+    sentry:
+      sentry === undefined || sentry === null
+        ? null
+        : ["1", "true"].includes(String(sentry).toLowerCase()),
   };
 }
 
@@ -47,7 +45,11 @@ export function distanceM(a, b) {
   const rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad;
   const dLon = (b.lon - a.lon) * rad;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) *
+      Math.cos(b.lat * rad) *
+      Math.sin(dLon / 2) ** 2;
   return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
 
@@ -58,29 +60,44 @@ export function insideFence(position, fences) {
 export const MAX_FENCES = 10;
 const DEFAULT_RADIUS_M = 600;
 
-// Text typed with a Chinese or Japanese keyboard: full-width forms (，；．－, digits, letters)
-// become ASCII, and 、。−, the ideographic space count as , . - and a space.
 const NARROW = { "、": ",", "。": ".", "−": "-", "　": " " };
-const narrow = (text) =>
-  text.replace(/[！-～、。−　]/g, (c) => NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 0xfee0));
 
-// One place per line (or separated by ";"): "Home, 1.3521, 103.8198, 600".
-// The name and the radius in metres are optional: "1.3521, 103.8198" is a 600 m fence.
-// "none" means no geofences.
+const narrow = (text) =>
+  text.replace(/[！-～、。−　]/g, (c) =>
+    NARROW[c] ?? String.fromCharCode(c.charCodeAt(0) - 0xfee0)
+  );
+
+// Format:
+// Home, latitude, longitude, radius_in_metres
+// Radius is optional; the existing default is 600 m.
+// Use "none" if no geofences are wanted.
 export function parseGeofences(text) {
   text = narrow(String(text ?? ""));
+
   if (text.trim().toLowerCase() === "none") return [];
+
   const places = text
     .split(/[\n;]+/)
     .map((s) => s.trim())
     .filter(Boolean);
-  // Only separators must not mean "no geofences" (and sentry turned on at home).
-  if (!places.length && text.trim()) throw new Error(`GEOFENCES has no places; write none for no geofences`);
-  if (places.length > MAX_FENCES) throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
+
+  if (!places.length && text.trim()) {
+    throw new Error("GEOFENCES has no places; write none for no geofences");
+  }
+
+  if (places.length > MAX_FENCES) {
+    throw new Error(`at most ${MAX_FENCES} geofences, got ${places.length}`);
+  }
+
   return places.map((place, i) => {
     const parts = place.split(",").map((s) => s.trim());
-    const name = parts[0] !== "" && Number.isFinite(Number(parts[0])) ? `place ${i + 1}` : parts.shift();
+    const name =
+      parts[0] !== "" && Number.isFinite(Number(parts[0]))
+        ? `place ${i + 1}`
+        : parts.shift();
+
     const [lat, lon, radius = DEFAULT_RADIUS_M] = parts.map(Number);
+
     const valid =
       (parts.length === 2 || parts.length === 3) &&
       parts.every((p) => p !== "") &&
@@ -88,43 +105,162 @@ export function parseGeofences(text) {
       Math.abs(lat) <= 90 &&
       Math.abs(lon) <= 180 &&
       radius > 0;
-    // The place itself is not repeated: this message is also shown on the Worker's own URL.
-    if (!valid) throw new Error(`geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600"`);
+
+    if (!valid) {
+      throw new Error(
+        `geofence ${i + 1} should look like "Home, 1.3521, 103.8198, 600"`
+      );
+    }
+
     return { name, lat, lon, radius_m: radius };
   });
 }
 
-// Returns { parking, action: "enable" | "none", reason }. `parking` is what to remember (null when driving).
+// Actions: "enable", "disable", "none".
 export function decide(car, parking, { fences }) {
   if (car.gear === null) {
-    // Still note sentry seen on, so the owner's later "off" is respected.
-    const seen = parking && car.sentry === true && !parking.seenOn ? { ...parking, seenOn: true } : parking;
-    return { parking: seen, action: "none", reason: "gear unknown" };
+    return {
+      parking,
+      action: "none",
+      reason: "gear unknown",
+    };
   }
-  if (car.gear !== "P") return { parking: null, action: "none", reason: `not parked (gear ${car.gear})` };
 
-  const moved = parking?.position && car.position && distanceM(parking.position, car.position) > NEW_PARKING_M;
-  const p = !parking || moved ? { position: car.position, attempts: 0, seenOn: false } : { ...parking };
+  if (car.gear !== "P") {
+    return {
+      parking: null,
+      action: "none",
+      reason: `not parked (gear ${car.gear})`,
+    };
+  }
+
+  const moved =
+    parking?.position &&
+    car.position &&
+    distanceM(parking.position, car.position) > NEW_PARKING_M;
+
+  const p =
+    !parking || moved
+      ? {
+          position: car.position,
+          attempts: 0,
+          seenOn: false,
+          manualOff: false,
+        }
+      : {
+          ...parking,
+          attempts: parking.attempts ?? 0,
+          seenOn: parking.seenOn ?? false,
+          manualOff: parking.manualOff ?? false,
+        };
+
   if (!p.position && car.position) p.position = car.position;
 
+  // Cannot safely decide where the car is if configured fences exist
+  // but the current GPS position is unavailable.
+  if (fences.length && !car.position) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "no position, cannot check geofence",
+    };
+  }
+
+  const fence = car.position ? insideFence(car.position, fences) : null;
+
+  // HOME: Sentry must be OFF. Clear the manual-off override so a
+  // subsequent away parking session can enable Sentry again.
+  if (fence) {
+    p.seenOn = false;
+    p.manualOff = false;
+    p.attempts = 0;
+
+    if (car.sentry === true) {
+      return {
+        parking: p,
+        action: "disable",
+        reason: `inside geofence "${fence.name}", turning sentry off`,
+      };
+    }
+
+    return {
+      parking: p,
+      action: "none",
+      reason:
+        car.sentry === false
+          ? `inside geofence "${fence.name}", sentry already off`
+          : `inside geofence "${fence.name}", sentry state unknown`,
+    };
+  }
+
+  // If Sentry was on during this parking session and is now off,
+  // respect the owner's decision. Do not turn it straight back on.
   if (car.sentry === true) {
     p.seenOn = true;
-    return { parking: p, action: "none", reason: "sentry on" };
-  }
-  if (p.seenOn) return { parking: p, action: "none", reason: "sentry turned off during this parking, respecting it" };
-  if (car.sentry === null) return { parking: p, action: "none", reason: "sentry state unknown" };
+    p.manualOff = false;
 
-  if (fences.length) {
-    if (!car.position) return { parking: p, action: "none", reason: "no position, cannot check geofence" };
-    const fence = insideFence(car.position, fences);
-    if (fence) return { parking: p, action: "none", reason: `inside geofence "${fence.name}"` };
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry on",
+    };
   }
+
+  if (p.seenOn) {
+    p.manualOff = true;
+
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry turned off during this parking, respecting it",
+    };
+  }
+
+  if (p.manualOff) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "manual sentry off override",
+    };
+  }
+
+  if (car.sentry === null) {
+    return {
+      parking: p,
+      action: "none",
+      reason: "sentry state unknown",
+    };
+  }
+
   if (car.battery !== null && car.battery < MIN_BATTERY) {
-    return { parking: p, action: "none", reason: `battery ${car.battery}% below ${MIN_BATTERY}%` };
+    return {
+      parking: p,
+      action: "none",
+      reason: `battery ${car.battery}% below ${MIN_BATTERY}%`,
+    };
   }
-  if (IN_USE.has(car.usage)) return { parking: p, action: "none", reason: `car in use (usage ${car.usage})` };
-  if (p.attempts >= MAX_ATTEMPTS) return { parking: p, action: "none", reason: `gave up after ${MAX_ATTEMPTS} attempts` };
+
+  if (IN_USE.has(car.usage)) {
+    return {
+      parking: p,
+      action: "none",
+      reason: `car in use (usage ${car.usage})`,
+    };
+  }
+
+  if (p.attempts >= MAX_ATTEMPTS) {
+    return {
+      parking: p,
+      action: "none",
+      reason: `gave up after ${MAX_ATTEMPTS} attempts`,
+    };
+  }
 
   p.attempts += 1;
-  return { parking: p, action: "enable", reason: `attempt ${p.attempts}/${MAX_ATTEMPTS}` };
+
+  return {
+    parking: p,
+    action: "enable",
+    reason: `attempt ${p.attempts}/${MAX_ATTEMPTS}`,
+  };
 }
